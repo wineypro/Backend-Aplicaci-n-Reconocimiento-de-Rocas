@@ -81,6 +81,31 @@ describe('Funciones implementadas por el estudiante', async () => {
     assert.equal(blockSelf.status, 403)
   })
 
+  // --- PRUEBAS DE PUNTOS EXTRA ---
+  test('Mejora Extra: El progreso ahora incluye un rango geológico (Gamificación)', async () => {
+    // Usamos el helper de registro del profesor encapsulado en 'app'
+    const { token } = await app.registerAndLogin('gamification_user')
+
+    // Usamos el request custom del profesor
+    const response = await app.request('GET', '/api/progress/me', { token })
+
+    assert.equal(response.status, 200)
+    assert.ok('rank' in response.body, 'La respuesta debe incluir el rango geológico')
+    assert.equal(typeof response.body.rank, 'string')
+  })
+
+  test('Mejora Extra: La ruta de Fusión responde correctamente (Alquimia)', async () => {
+    const { token } = await app.registerAndLogin('alchemy_user')
+
+    const response = await app.request('POST', '/api/collection/fusion', { 
+      token, 
+      body: { rockId1: 1, rockId2: 2 } 
+    })
+
+    assert.equal(response.status, 200)
+    assert.ok('success' in response.body)
+  })
+
   after(async () => {
     if (app) await app.close()
   })

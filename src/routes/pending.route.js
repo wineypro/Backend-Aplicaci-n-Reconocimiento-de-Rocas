@@ -17,15 +17,28 @@ const { createAdminController } = require('../controllers/admin.controller')
 const { createFusionService } = require('../services/fusionService')
 const { createFusionController } = require('../controllers/fusion.controller')
 
-const fusionController = createFusionController(createFusionService({ models }))
+// 1. Importamos dependencias para la integración de IA
+const { createRecognitionService } = require('../services/recognitionService')
+const { createAiService } = require('../services/aiService')
+const { createAiRecognitionController } = require('../controllers/aiRecognition.controller')
 
+const fusionController = createFusionController(createFusionService({ models }))
 const feedbackController = createFeedbackController(createFeedbackService({ models }))
 const progressController = createProgressController(createProgressService({ models }))
 const migrationController = createMigrationController(createMigrationService({ models, sequelize: models.sequelize }))
 const adminController = createAdminController(createAdminService({ models }))
 
+// 2. Instanciamos el controlador de IA aislado
+const recognitionService = createRecognitionService({ models })
+const aiService = createAiService()
+const aiRecognitionController = createAiRecognitionController(recognitionService, aiService)
+
 const router = Router()
 const userOrGuest = [validateToken.optional, createResolveActor(guestSessions)]
+
+// 3. Configuración de Multer
+const multer = require('multer')
+const upload = multer({ storage: multer.memoryStorage() })
 
 router.get('/progress/me', ...userOrGuest, progressController.getStats)
 router.get('/progress/me/history', ...userOrGuest, progressController.getHistory)
@@ -44,7 +57,10 @@ router.patch('/admin/users/:id', ...adminOnly, adminController.updateUser)
 router.get('/admin/users/:id/collection', ...adminOnly, adminController.getUserCollection)
 router.get('/admin/users/:id/achievements', ...adminOnly, adminController.getUserAchievements)
 
+// --- NUEVA MEJORA: Endpoint de IA con subida de archivo ---
+router.post('/recognition/auto', ...authenticated, upload.single('image'), aiRecognitionController.autoRecognize)
+
 // --- Easter Egg: Alquimia ---
-router.post('/collection/fusion', authenticated, fusionController.fuse)
+router.post('/collection/fusion', ...authenticated, fusionController.fuse)
 
 module.exports = router
