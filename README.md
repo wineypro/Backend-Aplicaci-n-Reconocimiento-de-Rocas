@@ -1,29 +1,91 @@
 # API de identificación de rocas
 
-Esta API permite administrar un catálogo de rocas y datos relacionados. También incluye una demostración de búsqueda textual para orientar una identificación de rocas.
+API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administrar un catálogo de rocas y sus clasificaciones, gestionar usuarios y roles, registrar reconocimientos recibidos desde un modelo externo o simulado, mantener colecciones personales y desbloquear logros.
 
-## Inicio rápido
+> **Estado de la identificación:** este backend no clasifica imágenes por sí mismo. El endpoint de reconocimiento recibe los datos de un resultado (`rockId`, `confidence` y, opcionalmente, `imageUrl`) y aplica las reglas de registro, colección y logros.
 
-1. Instala Node.js y las dependencias: `npm install`.
-2. Configura `.env` (ver abajo).
-3. Inicia el servicio: `npm start` o, para desarrollo, `npm run dev`.
-4. Consulta `http://localhost:8080/api/rock`.
-5. Ejecuta las pruebas: `npm test`.
+## Tabla de contenidos
 
-La primera conexión crea las tablas que faltan en SQLite. El servidor solo comienza a escuchar después de autenticar y sincronizar los modelos.
+- [Características](#características)
+- [Tecnologías](#tecnologías)
+- [Requisitos e instalación](#requisitos-e-instalación)
+- [Configuración](#configuración)
+- [Arquitectura](#arquitectura)
+- [Ejecución y base de datos](#ejecución-y-base-de-datos)
+- [Endpoints](#endpoints)
+- [Autenticación y permisos](#autenticación-y-permisos)
+- [Reconocimientos, invitados y logros](#reconocimientos-invitados-y-logros)
+- [Formato de respuestas y errores](#formato-de-respuestas-y-errores)
+- [Pruebas](#pruebas)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Funcionalidades pendientes](#funcionalidades-pendientes)
+
+## Características
+
+- CRUD de rocas, tipos, categorías, roles, logros, análisis, colecciones, usuarios y asociaciones de logros.
+- Búsqueda de rocas por texto, paginación y filtros por tipo, categoría y rango de dureza de Mohs.
+- Registro e inicio de sesión con contraseñas protegidas mediante bcrypt y autenticación JWT.
+- Control de acceso basado en roles, con operaciones administrativas restringidas.
+- Sesiones temporales para invitados, con token aleatorio, expiración y límite de reconocimientos.
+- Registro de reconocimientos y mantenimiento de una colección personal sin duplicar rocas.
+- Desbloqueo automático de logros según condiciones configuradas.
+- Inicialización de SQLite y carga de datos de demostración sin reemplazar los registros existentes.
+- Pruebas automatizadas con `node:test`.
+
+## Tecnologías
+
+- **Node.js**: entorno de ejecución.
+- **Express**: servidor HTTP y definición de rutas.
+- **Sequelize**: ORM y gestión de modelos y asociaciones.
+- **SQLite**: base de datos local.
+- **JWT**: autenticación mediante tokens.
+- **bcrypt**: hash de contraseñas.
+- **node:test**: pruebas automatizadas.
+
+## Requisitos e instalación
+
+Se requiere una versión compatible de Node.js y npm.
+
+1. Instala las dependencias:
+
+   ```bash
+   npm install
+   ```
+
+2. Crea un archivo `.env` en la raíz del proyecto y configura las variables indicadas en la sección siguiente.
+3. Inicia la API:
+
+   ```bash
+   npm start
+   ```
+
+   Para desarrollo, si el proyecto tiene configurado ese script:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Consulta el catálogo en `http://localhost:8080/api/rock`.
+5. Ejecuta las pruebas con `npm test`.
+
+El servidor comienza a escuchar únicamente después de autenticar la conexión y sincronizar los modelos con la base de datos.
+
+## Configuración
 
 ### Variables de entorno
 
-| Variable | Uso | Valor local sugerido |
+| Variable | Descripción | Valor local sugerido |
 |---|---|---|
-| `PORT` | Puerto HTTP | `8080` |
-| `DATABASE_NAME` | Nombre del archivo SQLite, dentro de `src/database` | `rock` |
-| `JWT_SECRET` | Secreto para firmar y verificar tokens | valor aleatorio privado |
-| `JWT_EXPIRES_IN` | Duración del token al iniciar sesión | `1d` |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_USERNAME` | Cuenta de administrador creada al arrancar si no existe | `admin@example.test` / contraseña propia / `admin` |
-| `GUEST_SESSION_TTL_HOURS` | Vigencia de una sesión de invitado | `72` |
+| `PORT` | Puerto HTTP del servidor. | `8080` |
+| `DATABASE_NAME` | Nombre del archivo SQLite dentro de `src/database`. | `rock` |
+| `JWT_SECRET` | Secreto utilizado para firmar y verificar los JWT. | Una cadena aleatoria privada |
+| `JWT_EXPIRES_IN` | Tiempo de vigencia del JWT. | `1d` |
+| `ADMIN_EMAIL` | Correo de la cuenta administradora inicial. | `admin@example.test` |
+| `ADMIN_PASSWORD` | Contraseña de la cuenta administradora inicial. | Una contraseña propia y segura |
+| `ADMIN_USERNAME` | Nombre de usuario de la cuenta administradora inicial. | `admin` |
+| `GUEST_SESSION_TTL_HOURS` | Vigencia de una sesión de invitado, en horas. | `72` |
 
-Ejemplo de `.env` (sin credenciales reales):
+Ejemplo de `.env` para desarrollo:
 
 ```dotenv
 PORT=8080
@@ -36,47 +98,139 @@ ADMIN_USERNAME=admin
 GUEST_SESSION_TTL_HOURS=72
 ```
 
-> TODO(student): la cátedra pide un archivo `.env.example` en el repositorio con este contenido. Créalo y no subas tu `.env` real.
+Los valores del ejemplo son ilustrativos. No publiques el archivo `.env` ni secretos reales en el repositorio. Se debe crear y mantener un `.env.example` sin credenciales reales.
 
-Sin `ADMIN_EMAIL`/`ADMIN_PASSWORD` se usa un valor de desarrollo (`admin@example.test` / `ChangeMe123!`); con `NODE_ENV=production` el servidor exige `ADMIN_PASSWORD`. El seeder nunca sobrescribe un administrador existente.
+En desarrollo, si no se especifican las credenciales de administración, el proyecto utiliza valores predeterminados documentados en el código. En producción, `ADMIN_PASSWORD` es obligatorio. El proceso de inicialización no sobrescribe una cuenta administradora existente. El secreto JWT predeterminado, si existe en la configuración, solo debe utilizarse para facilitar pruebas locales y debe sustituirse en despliegues.
 
-No publiques secretos en Git. El fallback JWT existe solo para facilitar la demostración local y debe reemplazarse en despliegues.
+## Arquitectura
 
-## Arquitectura: el recorrido de una petición
+El backend organiza las responsabilidades por capas:
 
-`src/server.js` carga configuración, espera la conexión y prepara la base de datos. Después `src/app.js` construye Express, instala middlewares, monta rutas y centraliza errores. Una ruta traduce URL y método HTTP a una función del controlador; el controlador convierte la petición en respuesta HTTP; el servicio encapsula operaciones de dominio y persistencia; el modelo Sequelize valida y consulta SQLite.
+`ruta → controlador → servicio → modelo → base de datos`
 
-| Capa | Responsabilidad | Ejemplos |
+Una petición llega a Express y atraviesa los middlewares correspondientes. La ruta define el método HTTP y la URL; el controlador interpreta la entrada y construye la respuesta HTTP; el servicio concentra las reglas de negocio y las operaciones de persistencia; Sequelize utiliza los modelos y sus asociaciones para consultar o modificar SQLite. Los errores se delegan al middleware global para mantener un formato consistente.
+
+| Capa o componente | Responsabilidad | Ejemplos |
 |---|---|---|
-| Configuración | Conexión Sequelize y opciones | `src/config/database.js` |
-| Modelos | Esquema, validaciones y relaciones | `Rock`, `Category`, `Type` |
-| Rutas | Asignar métodos y URLs a controladores | `src/routes/rock.route.js` |
-| Controladores | Códigos HTTP, entrada/salida y delegación | `createCrudController` |
-| Servicios | CRUD, paginación y límites de campos | `createCrudService` |
-| Utilidades | Lógica compartida sin estado HTTP | `buildListOptions` |
-| Middleware | Funciones transversales antes/después de rutas | JSON, CORS, Morgan y manejador de errores |
+| Servidor | Carga la configuración, conecta la base de datos y arranca la aplicación. | `src/server.js` |
+| Aplicación | Configura Express, middlewares, rutas y manejadores de errores. | `src/app.js` |
+| Configuración | Define la conexión con Sequelize y SQLite. | `src/config/database.js` |
+| Modelos | Definen entidades, campos, validaciones y asociaciones. | `Rock`, `Category`, `Type`, `User` |
+| Rutas | Relacionan métodos y URLs con controladores. | `src/routes/rock.route.js` |
+| Controladores | Adaptan las peticiones y los resultados a respuestas HTTP. | `src/controllers/crud.controller.js` |
+| Servicios | Implementan CRUD y reglas de negocio. | `src/services/crudService.js` |
+| Middleware | Aplica tareas transversales, autenticación, autorización y manejo de errores. | `src/middlewares/` |
+| Utilidades | Contienen lógica compartida para validar y preparar consultas. | `src/utils/queryOptions.js` |
 
-Los controladores genéricos usan `next(error)` para que el middleware global aplique un formato consistente. Las asociaciones se registran en `src/models/index.js`, y el arranque sincroniza el conjunto completo de modelos.
+Los controladores genéricos delegan los errores mediante `next(error)`. Las asociaciones entre modelos se registran en `src/models/index.js`.
+
+## Ejecución y base de datos
+
+Por defecto, SQLite utiliza el archivo `src/database/rock.sqlite`. La variable `DATABASE_NAME` cambia el nombre del archivo dentro de esa carpeta; el nombre solo admite letras, números, guiones y guiones bajos.
+
+Durante el arranque, el servidor:
+
+1. Carga las variables de entorno.
+2. Autentica la conexión con Sequelize.
+3. Sincroniza los modelos.
+4. Carga los datos de demostración que falten.
+5. Inicia el servidor HTTP.
+
+No se utiliza `force: true` para borrar y recrear todas las tablas. Sin embargo, Sequelize no realiza automáticamente todas las migraciones de esquemas existentes. Si una base de datos antigua no contiene las nuevas columnas o tablas, utiliza una base nueva o sigue el procedimiento de migración definido por el proyecto. Conserva una copia si necesitas mantener los datos anteriores.
+
+El seeder puede crear datos iniciales para tipos, categorías, roles, logros, rocas de ejemplo y la cuenta administradora. Está diseñado para evitar duplicar ejemplos en reinicios y no reemplazar valores que ya se hayan editado.
 
 ## Endpoints
 
-Todos los recursos genéricos aceptan `GET /`, `POST /`, `GET /:id`, `PATCH /:id` y `DELETE /:id`. El listado devuelve `{ items, total, page, limit }`; `DELETE` correcto responde `204`. Los modelos usan borrado lógico cuando tienen `paranoid: true`.
+La mayoría de los recursos CRUD genéricos ofrece:
 
-| Recurso | Prefijo | Notas |
+- `GET /`: lista recursos.
+- `POST /`: crea un recurso.
+- `GET /:id`: consulta un recurso por identificador.
+- `PATCH /:id`: actualiza un recurso.
+- `DELETE /:id`: elimina un recurso.
+
+El listado utiliza la forma `{ "items": [], "total": 0, "page": 1, "limit": 20 }`. Una eliminación correcta responde `204 No Content`. Los modelos configurados con `paranoid: true` utilizan borrado lógico.
+
+### Recursos generales
+
+La base de rutas documentada para los recursos es:
+
+| Recurso | Prefijo | Descripción |
 |---|---|---|
-| Rocas | `/api/rock` | Campos de catálogo y búsqueda `search` |
-| Categorías | `/api/category` | Clasificación de rocas |
-| Tipos | `/api/type` | Tipo asociado a una roca |
-| Roles | `/api/role` | Rol asociado a usuarios |
-| Logros | `/api/achievement` | Nombre, slug, descripción y experiencia |
-| Análisis | `/api/analysis` | Registro asociado a usuario y roca; no representa predicción ML |
-| Colecciones | `/api/collection` | Asociación usuario-roca |
-| Logros de usuario | `/api/user-achievement` | Unión usuario-logro |
-| Usuarios | `/api/user` | Registro, inicio de sesión, perfil propio y listado para Admin; no expone CRUD de contraseñas |
+| Rocas | `/api/rock` | Catálogo, búsqueda y filtros de rocas. |
+| Categorías | `/api/category` | Clasificación de las rocas. |
+| Tipos | `/api/type` | Tipos asociados a las rocas. |
+| Roles | `/api/role` | Roles del sistema. |
+| Logros | `/api/achievement` | Definición y configuración de logros. |
+| Análisis | `/api/analysis` | Registros de reconocimientos asociados a usuarios o sesiones. |
+| Colecciones | `/api/collection` | Asociación entre usuarios y rocas descubiertas. |
+| Logros de usuario | `/api/user-achievement` | Asociación entre usuarios y logros desbloqueados. |
+| Usuarios | `/api/user` | Registro, inicio de sesión, perfil propio y consultas administrativas. |
 
-### Consultas y ejemplo
+Los permisos concretos dependen de la ruta. Consulta [Autenticación y permisos](#autenticación-y-permisos).
 
-Los listados admiten `page` (desde 1), `limit` (por defecto 20, máximo 100), `search` y `searchBy`. El campo de búsqueda debe pertenecer a la lista permitida por el recurso. Ejemplo: `GET /api/rock?search=basalto&searchBy=name&page=1&limit=10`.
+### Paginación y búsqueda
+
+Los listados admiten los parámetros siguientes:
+
+- `page`: página solicitada, desde `1`.
+- `limit`: cantidad de resultados; por defecto `20` y máximo `100`.
+- `search`: texto que se desea buscar.
+- `searchBy`: campo permitido por el recurso para realizar la búsqueda.
+
+Ejemplo:
+
+```http
+GET /api/rock?search=basalto&searchBy=name&page=1&limit=10
+```
+
+Solo se permiten los campos de búsqueda configurados para cada recurso.
+
+### Filtros del catálogo
+
+| Endpoint | Función |
+|---|---|
+| `GET /api/rock?typeId=1&categoryId=2` | Filtra por tipo y/o categoría; puede combinarse con búsqueda y paginación. |
+| `GET /api/type/:id/rocks` | Lista las rocas de un tipo. |
+| `GET /api/category/:id/rocks` | Lista las rocas de una categoría. |
+| `GET /api/rock/identificar?q=oscuro` | Busca coincidencias de texto en propiedades de las rocas. |
+| `GET /api/rock/dureza?min=5&max=7` | Busca rocas dentro de un rango de dureza de Mohs, inclusive. |
+
+Los identificadores de tipo y categoría deben ser enteros positivos. Si un tipo o categoría no existe, los endpoints relacionados responden `404`. No se permite eliminar un tipo o categoría que tenga rocas asociadas; en ese caso se responde `409`.
+
+Las validaciones del catálogo incluyen campos obligatorios, referencias existentes, dureza entre `1` y `10` y unicidad de `scientificName` e `index`. Los nombres de tipos y categorías también son únicos. Las escrituras del catálogo requieren el rol `Admin`.
+
+El endpoint `/api/rock/identificar` realiza una búsqueda textual parcial en propiedades del catálogo. Es una ayuda de búsqueda educativa; **no identifica muestras ni infiere minerales mediante inteligencia artificial**.
+
+Ejemplo de búsqueda por dureza:
+
+```bash
+curl "http://localhost:8080/api/rock/dureza?min=5&max=7"
+```
+
+Ejemplo de respuesta:
+
+```json
+{
+  "min": 5,
+  "max": 7,
+  "total": 1,
+  "rocks": [
+    {
+      "id": 1,
+      "name": "Basalto",
+      "hardness": 6
+    }
+  ]
+}
+```
+
+El contenido exacto y la cantidad de resultados dependen de los datos de la base de datos. Los parámetros `min` y `max` son obligatorios, numéricos y no negativos. Si falta uno, los valores no son válidos o `min > max`, la API responde `400`.
+
+### Ejemplo de una roca
+
+Los campos disponibles dependen del modelo y de las validaciones definidas en el proyecto. Un ejemplo de cuerpo de solicitud es:
 
 ```json
 {
@@ -101,194 +255,195 @@ Los listados admiten `page` (desde 1), `limit` (por defecto 20, máximo 100), `s
 }
 ```
 
-Los campos obligatorios adicionales dependen de cada modelo y los IDs referenciales deben existir. Sequelize reporta errores de validación y unicidad como `400`.
+Los identificadores referenciales deben existir y solo se aceptan los campos permitidos por el catálogo.
 
-### Catálogo: filtros, tipos y categorías
+### Registro, inicio de sesión y perfil
 
-- `GET /api/rock?typeId=1&categoryId=2`: filtra por tipo y/o categoría (enteros positivos, si no `400`). Se combina con `search`, `page` y `limit`.
-- `GET /api/type/:id/rocks` y `GET /api/category/:id/rocks`: rocas de un tipo o categoría (`404` si no existe).
-- Los nombres de tipos y categorías son únicos (`400` si se repiten). `DELETE` de un tipo o categoría con rocas asociadas responde `409`.
-- Validaciones de roca: campos obligatorios, `hardness` entre 1 y 10 (escala de Mohs), `typeId`/`categoryId` existentes y `scientificName`/`index` únicos. Solo se aceptan los campos del catálogo (lista blanca).
-- Las escrituras del catálogo requieren rol Admin (ver matriz de roles).
-
-### Invitados, reconocimientos, colección y logros
-
-El modelo de reconocimiento se integrará después mediante una API externa: el backend recibe **el JSON que entregaría el modelo** (`rockId`, `confidence`) y se encarga de registrar, limitar y premiar. No clasifica imágenes.
-
-| Endpoint | Quién | Descripción |
+| Método y endpoint | Acceso | Función |
 |---|---|---|
-| `POST /api/guest/session` | anónimo | Crea una sesión temporal y devuelve `token` (una sola vez), `limit`, `remaining`, `expiresAt`. |
-| `GET /api/guest/session` | invitado (`X-Guest-Token`) | Estado de la sesión: `recognitionCount`, `remaining`, `status`. |
-| `POST /api/recognition` | invitado (`X-Guest-Token`) o usuario (Bearer) | Registra un reconocimiento (ver abajo). |
-| `GET /api/collection/me` | usuario | Su colección (`items` con la roca incluida, `total` = rocas distintas descubiertas). |
-| `GET /api/collection/me/:rockId` | usuario | Detalle de una roca descubierta; `404` si no es suya. |
+| `POST /api/user/registro` | Público | Registra una cuenta. |
+| `POST /api/user/login` | Público | Valida las credenciales y devuelve un JWT. |
+| `GET /api/user/me` | Usuario autenticado | Consulta el perfil propio. |
+| `PATCH /api/user/me` | Usuario autenticado | Actualiza los campos permitidos del perfil. |
+| `GET /api/user` | Admin | Lista usuarios. |
+| `GET /api/user/:id` | Admin | Consulta un usuario por identificador. |
+
+Para el registro se requieren `userName`, `email` y `password`; la contraseña debe tener al menos ocho caracteres y `phone` es opcional. La contraseña se almacena como hash con bcrypt. El rol inicial lo establece el servidor: se ignora un `roleId` enviado por el cliente para evitar que alguien se asigne privilegios. El perfil propio solo permite editar `userName` y `phone`; no permite modificar el rol ni el estado de la cuenta.
+
+Las cuentas bloqueadas (`status: "blocked"`) no pueden iniciar sesión. El modelo `User` elimina el campo `password` de la representación JSON.
+
+### Sesiones de invitados, reconocimientos y colección
+
+| Método y endpoint | Acceso | Función |
+|---|---|---|
+| `POST /api/guest/session` | Público | Crea una sesión temporal de invitado. |
+| `GET /api/guest/session` | Token de invitado | Consulta el estado y el límite restante. |
+| `POST /api/recognition` | Invitado o usuario autenticado | Registra un resultado de reconocimiento. |
+| `GET /api/collection/me` | Usuario autenticado | Consulta la colección propia. |
+| `GET /api/collection/me/:rockId` | Usuario autenticado | Consulta una roca de la colección propia. |
+
+Para invitados, el token se envía mediante `X-Guest-Token`. Para usuarios registrados, se utiliza `Authorization: Bearer <TOKEN>`.
+
+Ejemplo de creación de sesión y registro de reconocimiento:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/api/guest/session | node -pe "JSON.parse(require('fs').readFileSync(0)).token")
+
 curl -X POST http://localhost:8080/api/recognition \
-  -H "Content-Type: application/json" -H "X-Guest-Token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Guest-Token: $TOKEN" \
   -d '{ "rockId": 1, "confidence": 92, "imageUrl": "https://example.org/photo.jpg" }'
 ```
 
-```json
-{
-  "analysis": { "id": 1, "guestSessionId": 1, "rockId": 1, "confidence": 92, "result": "Basalto" },
-  "collection": { "rockId": 1, "recognitionCount": 1, "firstDiscoveredAt": "2026-09-30T12:00:00.000Z" },
-  "newDiscovery": true,
-  "unlockedAchievements": [ { "slug": "first-discovery", "name": "Primer descubrimiento", "unlockedAt": "2026-09-30T12:00:00.000Z" } ],
-  "guest": { "status": "active", "recognitionCount": 1, "limit": 10, "remaining": 9 }
-}
-```
+El endpoint de reconocimiento recibe un resultado en JSON; no procesa una imagen ni ejecuta un modelo de clasificación dentro de este backend. La respuesta puede incluir el análisis registrado, el estado de la colección, si es un nuevo descubrimiento, los logros desbloqueados y el estado de la sesión de invitado.
 
-Reglas (en `src/services/recognitionService.js`, todo dentro de una transacción):
+Reglas de negocio:
 
-- Invitado: máximo 10 reconocimientos **por sesión** (no por persona). El 11.º responde `403` con `code: "GUEST_LIMIT_REACHED"` y pide crear una cuenta. Los intentos inválidos no consumen el límite. La sesión guarda solo el hash SHA-256 del token y expira según `GUEST_SESSION_TTL_HOURS`.
-- Usuario autenticado: sin límite.
-- Una roca repetida no duplica la colección: incrementa `recognitionCount` y conserva `firstDiscoveredAt`.
-- Logros automáticos (`src/services/achievementService.js`), definidos por `conditionType` + `conditionValue` en la tabla `achievement`: `first-discovery` (1 roca distinta), `rock-explorer` (3 rocas distintas) y `dedicated-identifier` (10 reconocimientos). Cada logro se desbloquea una sola vez por dueño y guarda `unlockedAt`. Un Admin puede desactivarlos con `PATCH /api/achievement/:id` (`{ "isActive": false }`).
+- Una sesión de invitado permite hasta **10 reconocimientos válidos por sesión**. El límite no es por persona.
+- Al superar el límite, el siguiente intento responde `403` con el código `GUEST_LIMIT_REACHED`.
+- Los intentos inválidos no consumen el límite.
+- Las sesiones expiran según `GUEST_SESSION_TTL_HOURS`; la base de datos almacena el hash SHA-256 del token, no el token en texto plano.
+- Los usuarios autenticados no tienen ese límite de reconocimientos.
+- Descubrir nuevamente una roca no crea una entrada duplicada en la colección: aumenta `recognitionCount` y conserva `firstDiscoveredAt`.
 
-### Demo de identificación por propiedades
+### Logros automáticos
 
-`GET /api/rock/identificar?q=oscuro` busca coincidencias parciales, sin distinguir mayúsculas de minúsculas según el comportamiento de SQLite/LIKE, en propiedades textuales de catálogo (nombre, composición, fórmula, ambiente, usos, color, textura, entre otras). Devuelve `{ query, method: "text-match", total, rocks }`. Es una ayuda educativa de búsqueda, **no identifica muestras ni infiere minerales**.
+Los logros se definen mediante `conditionType` y `conditionValue`. El servicio de logros evita desbloquear dos veces el mismo logro para un mismo propietario y registra la fecha `unlockedAt`.
 
-### Registro e inicio de sesión
+| Slug | Condición documentada |
+|---|---|
+| `first-discovery` | Descubrir una roca distinta. |
+| `rock-explorer` | Descubrir tres rocas distintas. |
+| `dedicated-identifier` | Registrar diez reconocimientos. |
 
-- `POST /api/user/registro`: `userName`, `email` y `password` (mínimo 8 caracteres) son obligatorios; `phone` es opcional. La contraseña se transforma con bcrypt antes de persistir. **El rol siempre es `Usuario autenticado`**: un `roleId` enviado por el cliente se ignora, así nadie puede autoasignarse privilegios.
-- `POST /api/user/login`: recibe `email` y `password`; devuelve un JWT. Las cuentas con `status: "blocked"` reciben `403`.
-- `GET /api/user/me` y `PATCH /api/user/me` (Bearer): perfil propio; solo se puede editar `userName` y `phone` (nunca rol ni estado).
-- `GET /api/user` y `GET /api/user/:id` (solo Admin): consulta de usuarios registrados.
-- `src/middlewares/validateToken.js`: middleware Bearer (`validateToken.optional` deja pasar peticiones anónimas). Comprueba firma, vencimiento, existencia y estado activo del usuario y carga su rol.
-- `src/middlewares/authorizeRoles.js`: `authorizeRoles('Admin')` responde `403` si el rol no está permitido. `src/middlewares/guards.js` exporta las cadenas listas `adminOnly` y `authenticated`.
+Un administrador puede desactivar un logro mediante `PATCH /api/achievement/:id`, por ejemplo con el cuerpo `{ "isActive": false }`.
 
-### Roles y permisos
+### Claves compuestas de logros de usuario
 
-| Recurso | Anónimo / invitado | Usuario autenticado | Admin |
-|---|---|---|---|
-| Catálogo (`rock`, `type`, `category`, `achievement`) lectura | sí | sí | sí |
-| Catálogo escritura (POST/PATCH/DELETE) | `401` | `403` | sí |
-| `POST /api/recognition` | sí (10 por sesión) | sí (sin límite) | sí |
-| `GET /api/collection/me` | `401` | sí (solo la propia) | sí (la propia) |
-| `role`, `analysis`, `collection`, `user-achievement` (CRUD crudo) | `401` | `403` | sí |
-| `/api/user` (listado) | `401` | `403` | sí |
-- `User.prototype.toJSON`: elimina `password` de las respuestas serializadas.
-
-## Clases, funciones y modelos
-
-- `start` (`src/server.js`): carga variables, autentica Sequelize, sincroniza y recién entonces escucha; los fallos evitan un servidor parcialmente listo.
-- `createApp` (`src/app.js`): crea una instancia Express aislada, monta recursos y error/not-found handlers.
-- `createCrudRouter(model, options)` (`src/routes/crud.route.js`): conecta cinco operaciones HTTP genéricas con un modelo.
-- `createCrudController(service, resourceName)` (`src/controllers/crud.controller.js`): adapta parámetros de ruta y estados HTTP a operaciones de servicio.
-- `createCrudService({ model, searchableFields, allowedFields })` (`src/services/crudService.js`): implementa listar, buscar por clave, crear, actualizar y eliminar; filtra campos inmutables y puede restringir escrituras con una lista permitida.
-- `buildListOptions(query, searchableFields)` (`src/utils/queryOptions.js`): valida números de página, limita resultados y crea condiciones `LIKE` únicamente para campos autorizados.
-- `UserController` (`src/controllers/user.controller.js`): implementa registro y autenticación; `validateToken` (`src/middlewares/validateToken.js`) protege rutas mediante Bearer JWT.
-
-Los modelos Sequelize corresponden a las entidades `Achievement`, `Analysis`, `Category`, `Collection`, `Rock`, `Role`, `Type`, `User` y `UserAchievement`. Las asociaciones describen, por ejemplo, una categoría con muchas rocas, y usuarios con colecciones, análisis y logros.
-
-## Respuestas y errores
-
-- `200`: lectura o modificación exitosa.
-- `201`: recurso creado.
-- `204`: eliminado.
-- `400`: datos, filtros o referencias inválidas.
-- `401`: token ausente, inválido o vencido.
-- `404`: recurso o ruta inexistente.
-- `409`: usuario duplicado en registro.
-- `500`: error interno no esperado.
-
-## Pruebas
-
-`npm test` corre las pruebas integradas con `node:test`. Cubren validación/paginación/búsqueda y el comportamiento CRUD del servicio, incluidos campos inmutables y registros inexistentes. Agrega pruebas al introducir nuevas reglas de dominio para mantener claro qué garantiza cada capa.
-
-# Corrección de claves compuestas
-
-`UserAchievement` tiene clave primaria compuesta `(userId, achievementId)`. Para un registro individual se requieren ambas claves en la ruta:
+`UserAchievement` utiliza la clave primaria compuesta `(userId, achievementId)`. Para consultar, actualizar o eliminar una asociación específica se necesitan ambos identificadores:
 
 - `GET /api/user-achievement/:userId/:achievementId`
 - `PATCH /api/user-achievement/:userId/:achievementId`
 - `DELETE /api/user-achievement/:userId/:achievementId`
 
-La creación/listado siguen en `POST /api/user-achievement` y `GET /api/user-achievement`. Ejemplo: `GET /api/user-achievement/7/3` recupera el logro 3 del usuario 7; `PATCH` solo puede cambiar `rockId`, no la identidad de la asociación. `DELETE` elimina exactamente esa unión.
+La creación y el listado utilizan `POST /api/user-achievement` y `GET /api/user-achievement`. Por ejemplo, `GET /api/user-achievement/7/3` consulta el logro `3` del usuario `7`. La actualización no puede cambiar la identidad de la asociación; únicamente permite modificar los campos expresamente autorizados, como `rockId` según la implementación documentada.
 
-No se cambió política de autenticación para Analysis o Collection.
+## Autenticación y permisos
 
-## Desafío para la clase de hoy: encontrar rocas por dureza
+El middleware `src/middlewares/validateToken.js` valida tokens Bearer, comprueba firma y vencimiento, verifica la existencia y el estado activo del usuario y carga su rol. Su variante `validateToken.optional` permite que ciertas rutas admitan solicitudes anónimas. `src/middlewares/authorizeRoles.js` permite restringir rutas por rol; `src/middlewares/guards.js` exporta las cadenas `adminOnly` y `authenticated`.
 
-**Objetivo:** agregar un filtro numérico para que una persona pueda buscar rocas dentro de un rango de dureza de Mohs
-Implementa `GET /api/rock/dureza?min=5&max=7` y responde con una lista de rocas cuya dureza esté entre ambos límites, inclusive. Trabaja por capas: define la ruta, delega la lógica al servicio y deja que el controlador traduzca el resultado a una respuesta HTTP. No pongas consultas ni reglas de negocio directamente en la ruta.
+| Recurso u operación | Anónimo / invitado | Usuario autenticado | Admin |
+|---|---|---|---|
+| Lectura del catálogo (`rock`, `type`, `category`, `achievement`) | Permitida | Permitida | Permitida |
+| Escritura del catálogo | `401` | `403` | Permitida |
+| `POST /api/recognition` | Permitida, con límite por sesión invitada | Permitida, sin ese límite | Permitida |
+| `GET /api/collection/me` | `401` | Solo la propia | Solo su propia colección mediante esta ruta |
+| CRUD directo de `role`, `analysis`, `collection` y `user-achievement` | `401` | `403` | Permitido |
+| Listado de usuarios (`/api/user`) | `401` | `403` | Permitido |
 
-**Criterios de aceptación**
+Esta matriz resume el comportamiento descrito en el proyecto; la configuración específica de cada ruta es la fuente definitiva de permisos.
 
-- `min` y `max` son obligatorios, numéricos y no negativos; si falta uno o el rango es inválido (`min > max`), responde `400` con un mensaje claro.
-- Una búsqueda válida devuelve `200` y solo incluye rocas con `hardness >= min` y `hardness <= max`.
-- Agrega pruebas para: resultados dentro y fuera del rango, límites inclusivos y entradas inválidas.
-- Actualiza esta sección con un ejemplo `curl` y la forma de la respuesta cuando termines.
+## Formato de respuestas y errores
 
-**Pista:** `src/routes/rock.route.js` ya muestra cómo declarar rutas específicas antes de las rutas CRUD genéricas; `src/services/crudService.js` y `src/utils/queryOptions.js` sirven como referencias para mantener cada responsabilidad en su capa.
+Los endpoints utilizan códigos HTTP para indicar el resultado de una solicitud:
 
-**Solución de referencia** (ruta `src/routes/rock.route.js` → `byHardness` en `src/controllers/rock.controller.js` → `findByHardness` en `src/services/rockService.js`; pruebas en `test/rockHardness.test.js`):
+| Código | Significado |
+|---|---|
+| `200` | Consulta o modificación correcta. |
+| `201` | Recurso creado. |
+| `204` | Eliminación correcta sin cuerpo de respuesta. |
+| `400` | Datos, filtros, validaciones o referencias inválidas. |
+| `401` | Falta autenticación o el token es inválido o ha vencido. |
+| `403` | El usuario no tiene permisos o alcanzó un límite de uso. |
+| `404` | No existe el recurso o la ruta solicitada. |
+| `409` | Conflicto, como un registro duplicado o una eliminación no permitida por relaciones existentes. |
+| `500` | Error interno no esperado. |
+| `501` | Funcionalidad pendiente de implementación, cuando se usa el andamiaje correspondiente. |
+
+Los errores de validación y unicidad de Sequelize se convierten en respuestas `400`; los controladores delegan los errores al middleware global.
+
+## Suite de pruebas automatizadas
+
+Ejecuta la suite completa con:
 
 ```bash
-curl "http://localhost:8080/api/rock/dureza?min=5&max=7"
+npm test
 ```
 
-```json
-{
-  "min": 5,
-  "max": 7,
-  "total": 3,
-  "rocks": [ { "id": 1, "name": "Basalto", "hardness": 6 } ]
-}
+La suite utiliza `node:test` y `test/helpers/testApp.js` para levantar la aplicación con una base de datos SQLite temporal. Los antiguos casos pendientes (`test.todo`) de la cátedra fueron convertidos en pruebas funcionales, de modo que las funcionalidades implementadas se verifican mediante solicitudes HTTP y comprobaciones de sus respuestas y efectos en la base de datos.
+
+La cobertura incluye:
+
+- **CRUD y consultas:** creación, lectura, actualización y eliminación; registros inexistentes; campos inmutables; validación de datos; paginación, búsqueda y límites de resultados.
+- **Catálogo y taxonomía:** filtros por tipo y categoría, consulta de rocas asociadas a tipos y categorías, validaciones de referencias y búsqueda por rango de dureza de Mohs, incluidos los límites inclusivos y los parámetros inválidos.
+- **Autenticación y autorización:** registro, inicio de sesión, JWT, contraseñas protegidas con bcrypt, cuentas bloqueadas, perfil propio, roles y restricciones de acceso para operaciones administrativas.
+- **Sesiones de invitados:** creación y consulta de sesiones temporales, expiración y límite de reconocimientos por sesión.
+- **Reconocimientos y colecciones:** registro del resultado recibido, historial, transacciones, descubrimientos nuevos, actualización del contador al reconocer una roca repetida y prevención de duplicados en la colección.
+- **Progreso y estadísticas personales:** consulta del progreso, historial de reconocimientos y métricas de descubrimiento de rocas.
+- **Logros:** desbloqueo automático de logros como `first-discovery`, `rock-explorer` y `dedicated-identifier`, prevención de duplicados y registro de la fecha de desbloqueo.
+- **Feedback:** creación, consulta y actualización de comentarios vinculados a reconocimientos, con comprobación de que la operación corresponda al usuario propietario.
+- **Migración de invitados:** transferencia de colecciones y logros a una cuenta autenticada, invalidación de la sesión temporal y prevención de transferencias repetidas.
+- **Administración:** verificación de permisos `adminOnly` para estadísticas globales, consulta administrativa de reconocimientos y feedback, gestión del estado de las cuentas y acceso a los datos de otros usuarios.
+- **Claves compuestas:** operaciones sobre `UserAchievement` identificando el registro mediante `userId` y `achievementId`.
+- **Errores y transacciones:** respuestas HTTP adecuadas ante datos inválidos, falta de permisos, recursos inexistentes y conflictos; comprobación de que las operaciones relacionadas mantengan la consistencia de los datos.
+
+Las pruebas de reconocimiento no implican que este backend clasifique imágenes por sí mismo: el flujo documentado recibe un resultado simulado del modelo y comprueba cómo se registra y procesa.
+
+## Estructura del proyecto
+
+```text
+src/
+├── app.js
+├── server.js
+├── config/
+│   └── database.js
+├── controllers/
+├── database/
+│   ├── seedAdmin.js
+│   └── seedDemoData.js
+├── middlewares/
+│   ├── validateToken.js
+│   ├── authorizeRoles.js
+│   └── guards.js
+├── models/
+│   └── index.js
+├── routes/
+│   ├── crud.route.js
+│   ├── rock.route.js
+│   └── taxonomy.route.js
+├── services/
+│   ├── crudService.js
+│   ├── rockService.js
+│   ├── recognitionService.js
+│   ├── guestSessionService.js
+│   ├── collectionService.js
+│   └── achievementService.js
+└── utils/
+    └── queryOptions.js
+
+test/
+├── helpers/
+│   └── testApp.js
+├── auth.test.js
+├── rockHardness.test.js
+└── pruebas de progreso, logros, feedback, migración y administración
 ```
 
-Una consulta inválida responde `400`, por ejemplo `GET /api/rock/dureza?min=8&max=5` → `{ "message": "min no puede ser mayor que max" }`. Faltan parámetros: `Los parámetros min y max son obligatorios`; valores no numéricos o negativos: `min y max deben ser numéricos y no negativos`.
+Esta estructura resume los archivos mencionados en la documentación; puede haber otros archivos y pruebas en el repositorio.
 
-## SQLite: ubicación y datos de demostración
+## Funcionalidades implementadas y estado del proyecto
 
-Al ejecutar `npm start`, el proceso inicia `src/server.js`: autentica la conexión, crea las tablas faltantes con Sequelize, carga datos de demostración y recién entonces levanta Express (que se construye mediante `createApp` en `src/app.js`). Si falla cualquiera de esos pasos, el proceso termina con error en vez de anunciar que la API está lista.
+Las funcionalidades que anteriormente estaban representadas por `test.todo` fueron implementadas y cuentan con pruebas funcionales, de acuerdo con los cambios del proyecto. Entre ellas se encuentran:
 
-Por defecto, la base es `src/database/rock.sqlite`, independiente de la carpeta desde la que se invoque Node. `DATABASE_NAME` cambia el nombre del archivo en esa misma carpeta; solo acepta letras, números, guiones y guiones bajos. No se ejecuta `force: true` ni se borra el archivo existente.
+- [x] Progreso y estadísticas individuales: `GET /api/progress/me`.
+- [x] Historial de reconocimientos: `GET /api/progress/me/history`.
+- [x] Consulta de logros propios, bloqueados y desbloqueados: `GET /api/achievement/me`.
+- [x] Feedback asociado a reconocimientos, con operaciones de creación, consulta y actualización y validación de propiedad.
+- [x] Migración de colecciones y logros de una sesión de invitado a una cuenta, con invalidación del token temporal y prevención de doble transferencia.
+- [x] Administración de usuarios, incluyendo control de rol y estado de cuenta.
+- [x] Estadísticas globales: `GET /api/admin/stats`.
+- [x] Consulta administrativa del historial de reconocimientos y feedback.
+- [x] Consulta administrativa de las colecciones y los logros de usuarios.
+- [x] Pruebas automatizadas para los flujos anteriores, además de las pruebas de catálogo, autenticación, permisos, dureza, claves compuestas y transacciones.
 
-En la primera ejecución, el seeder agrega solo registros que faltan: tipos, categorías, roles (Admin, Usuario autenticado, Estudiante y Docente), cinco logros (tres automáticos con condición, ver más arriba), cuatro rocas de ejemplo (basalto, granito, arenisca y pizarra) y la cuenta de administrador definida por `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
-
-> **Cambio de esquema:** esta versión agrega tablas y columnas (`guest_session`, `guest_achievement`, `status` en usuarios, condiciones en logros, `firstDiscoveredAt` en colecciones, etc.). Sequelize no altera tablas existentes al arrancar. Si ya tenías un `src/database/rock.sqlite` de versiones anteriores (está ignorado por Git y es descartable), bórralo o usa otro `DATABASE_NAME` para que se cree con el esquema nuevo. Para detectar filas existentes usa nombres estables o `scientificName`; nunca reemplaza valores que ya editaste. En reinicios no duplica los ejemplos. La siembra es inicialización didáctica, no reconocimiento por imagen ni un modelo de aprendizaje automático. Para una base nueva sin los ejemplos, configura otro `DATABASE_NAME`; conserva el archivo anterior si necesitas sus datos.
-
-## Guía para estudiantes (Cátedra I)
-
-Este repositorio implementa aproximadamente el 70 % de los requisitos de la Cátedra I como **referencia de arquitectura**: estudia cómo cada funcionalidad recorre `ruta → controlador → servicio → modelo` y replica el patrón en lo pendiente. El resto (~30 %) está marcado con `TODO(student)` en el código, responde `501` y tiene pruebas `test.todo`.
-
-### Ya implementado (úsalo como modelo)
-
-| Requisito | Dónde mirar |
-|---|---|
-| Registro, login, JWT, hash bcrypt, sin contraseñas en respuestas | `src/controllers/user.controller.js`, `src/models/user.js` |
-| Roles, `authorizeRoles`, rutas privadas, admin sin autoasignación | `src/middlewares/*`, `test/auth.test.js` |
-| Seeders: roles, administrador, tipos, categorías, rocas, logros | `src/database/seedDemoData.js`, `src/database/seedAdmin.js` |
-| CRUD de rocas, filtros por tipo/categoría, validaciones, dureza | `src/routes/rock.route.js`, `src/services/rockService.js` |
-| Tipos y categorías únicos, bloqueo de borrado con rocas, rocas por tipo/categoría | `src/routes/taxonomy.route.js` |
-| Sesiones de invitado con token difícil de adivinar y límite de 10 | `src/services/guestSessionService.js` |
-| Reconocimiento (resultado simulado del modelo), historial (`Analysis`) | `src/services/recognitionService.js` |
-| Colección personal sin duplicados, contador y primera fecha | `src/services/collectionService.js`, `src/models/collection.js` |
-| 3 logros automáticos sin repetición, con fecha de desbloqueo | `src/services/achievementService.js` |
-| Documentación, ejemplo de `.env`, pruebas de integración | este README, `test/helpers/testApp.js` |
-
-### Pendiente (tu trabajo)
-
-Cada punto tiene una ruta ya protegida en `src/routes/pending.route.js` con un comentario `TODO(student)` que explica reglas y pistas, y una prueba `test.todo` en `test/pendingStudent.test.js`.
-
-- [ ] Progreso y estadísticas individuales: `GET /api/progress/me` (reconocimientos, rocas distintas, logros, % de descubrimiento) y `GET /api/progress/me/history`.
-- [ ] Logros bloqueados/desbloqueados: `GET /api/achievement/me`.
-- [ ] Retroalimentación: modelo `Feedback` y `POST|GET|PATCH /api/recognition/:id/feedback` (una por reconocimiento, solo del dueño).
-- [ ] Migración de invitado a cuenta: `POST /api/guest/migrate` (transferir colección y logros, invalidar la sesión, evitar doble transferencia).
-- [ ] Administración de usuarios: `PATCH /api/admin/users/:id` (rol y estado; el login ya rechaza cuentas `blocked`).
-- [ ] Estadísticas globales: `GET /api/admin/stats` (usuarios, rocas más reconocidas, total de reconocimientos).
-- [ ] Historial y retroalimentación globales: `GET /api/admin/recognitions`, `GET /api/admin/feedback`.
-- [ ] Colección y logros de cualquier usuario: `GET /api/admin/users/:id/collection` y `/achievements`.
-- [ ] Crear `.env.example` en el repositorio (sin credenciales reales).
-
-### Cómo trabajar cada punto
-
-1. Convierte el `test.todo` correspondiente en una prueba real que falle (usa `test/helpers/testApp.js`, que levanta la API sobre una base SQLite temporal).
-2. Implementa servicio y controlador; reemplaza `notImplemented(...)` en `pending.route.js` y borra esa ruta de la prueba de andamiaje.
-3. Ejecuta `npm test` y marca el punto en esta lista.
-
-Los límites de sesión de invitado son por sesión, no por persona; no lo presentes como una garantía. El "reconocimiento" recibe un JSON simulado del modelo: no hay clasificación de imágenes en este backend.
+Para comprobar el estado actual del proyecto, ejecuta `npm test`. La suite debe finalizar correctamente; si una prueba falla, revisa el mensaje y el caso correspondiente antes de considerar validada la versión.
