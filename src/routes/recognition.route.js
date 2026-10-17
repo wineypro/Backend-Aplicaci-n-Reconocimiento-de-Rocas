@@ -12,7 +12,6 @@ const service = createRecognitionService({ models, sequelize: models.sequelize, 
 const controller = createRecognitionController(service)
 
 const router = Router()
-// Registered users send a Bearer token, guests send X-Guest-Token. Recognition never works anonymously without a session.
 router.post('/', validateToken.optional, createResolveActor(guestSessions), controller.create)
 module.exports = router
 module.exports.guestSessions = guestSessions

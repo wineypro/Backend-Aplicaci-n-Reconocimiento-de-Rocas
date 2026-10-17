@@ -97,13 +97,20 @@ describe('Funciones implementadas por el estudiante', async () => {
   test('Mejora Extra: La ruta de Fusión responde correctamente (Alquimia)', async () => {
     const { token } = await app.registerAndLogin('alchemy_user')
 
+    // 1. El usuario "descubre" la roca 1 y la roca 2 usando la ruta normal
+    await app.request('POST', '/api/recognition', { token, body: { rockId: 1, confidence: 99 } })
+    await app.request('POST', '/api/recognition', { token, body: { rockId: 2, confidence: 99 } })
+
+    // 2. Ahora que las tiene en su colección, intenta fusionarlas
     const response = await app.request('POST', '/api/collection/fusion', { 
       token, 
       body: { rockId1: 1, rockId2: 2 } 
     })
 
+    // 3. Ahora sí debe dar 200 OK y devolver Mármol Brillante
     assert.equal(response.status, 200)
     assert.ok('success' in response.body)
+    assert.equal(response.body.discoveredItem, 'Mármol Brillante')
   })
 
   after(async () => {

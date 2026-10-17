@@ -15,16 +15,22 @@ const createAiService = () => ({
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`La API respondió con estado ${response.status}`)
+      const jsonResponse = await response.json()
+
+      if (!response.ok || jsonResponse.success === false) {
+        throw new Error(`La API respondió con error: ${jsonResponse.message || response.status}`)
       }
 
-      const data = await response.json()
-      const bestMatch = data.results[0] 
-      
+      const bestMatch = jsonResponse.result || (jsonResponse.predictions && jsonResponse.predictions[0])
+
+      if (!bestMatch) {
+        throw new Error('La IA no pudo identificar ninguna roca en la imagen.')
+      }
+
       return {
-        rockId: bestMatch.id,
-        confidence: Math.round(bestMatch.confidence * 100)
+        rockName: bestMatch.scientific_name || bestMatch.label,
+        confidence: bestMatch.confidence,
+        catalog: bestMatch.catalog || bestMatch
       }
     } catch (error) {
       throw new HttpError(502, 'Error al comunicarse con la IA: ' + error.message)
