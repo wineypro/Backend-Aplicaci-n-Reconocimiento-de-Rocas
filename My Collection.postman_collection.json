@@ -1,0 +1,235 @@
+{
+  "info": {
+    "_collection_link": "https://go.postman.co/collection/58479046-22b00192-e954-4332-9bc1-f0d1f069a281?source=collection_link",
+    "_exporter_id": "58479046",
+    "_postman_id": "22b00192-e954-4332-9bc1-f0d1f069a281",
+    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "name": "My Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "name": "Get data",
+      "request": {
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data.",
+        "header": [],
+        "method": "GET",
+        "url": {
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "get"
+          ],
+          "raw": "postman-echo.com/get"
+        }
+      },
+      "response": []
+    },
+    {
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ],
+            "packages": {},
+            "requests": {},
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "name": "Post data",
+      "request": {
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\n\t\"name\": \"Add your name in the body\"\n}"
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code.",
+        "header": [],
+        "method": "POST",
+        "url": {
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "post"
+          ],
+          "raw": "postman-echo.com/post"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8080/api/guest/session",
+      "request": {
+        "body": {
+          "formdata": [
+            {
+              "key": "image",
+              "src": [
+                "/C:/Users/Usuario/Downloads/images.jpg"
+              ],
+              "type": "file"
+            }
+          ],
+          "mode": "formdata"
+        },
+        "header": [
+          {
+            "key": "X-Guest-Token",
+            "value": "54b3522e22fc9d757d6d6722d1495146c6faf443bbac25c753b84595d6f84384"
+          }
+        ],
+        "method": "POST",
+        "url": {
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "api",
+            "recognition",
+            "auto"
+          ],
+          "port": "8080",
+          "protocol": "http",
+          "raw": "http://localhost:8080/api/recognition/auto"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8080/api/user/login",
+      "request": {
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\r\n  \"email\": \"admin@example.test\",\r\n  \"password\": \"MiContrasenaSegura123!\"\r\n}"
+        },
+        "header": [],
+        "method": "POST",
+        "url": {
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "api",
+            "user",
+            "login"
+          ],
+          "port": "8080",
+          "protocol": "http",
+          "raw": "http://localhost:8080/api/user/login"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8080/api/recognition",
+      "request": {
+        "body": {
+          "formdata": [
+            {
+              "key": "image",
+              "src": [
+                "/C:/Users/Usuario/Downloads/images (2).jpg"
+              ],
+              "type": "file"
+            }
+          ],
+          "mode": "formdata"
+        },
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_02hm}}"
+          }
+        ],
+        "method": "POST",
+        "url": {
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "api",
+            "recognition",
+            "auto"
+          ],
+          "port": "8080",
+          "protocol": "http",
+          "raw": "http://localhost:8080/api/recognition/auto"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "http://localhost:8080/api/collection/fusion",
+      "request": {
+        "body": {
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          },
+          "raw": "{\r\n  \"rockId1\": 11,\r\n  \"rockId2\": 1\r\n}"
+        },
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "{{bearer_token_02hm}}"
+          }
+        ],
+        "method": "POST",
+        "url": {
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "api",
+            "collection",
+            "fusion"
+          ],
+          "port": "8080",
+          "protocol": "http",
+          "raw": "http://localhost:8080/api/collection/fusion"
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "bearer_token_11x2",
+      "secret": true
+    }
+  ]
+}
