@@ -1,4 +1,5 @@
 const { Router } = require('express')
+const multer = require('multer')
 const validateToken = require('../middlewares/validateToken')
 const { createResolveActor } = require('../middlewares/resolveActor')
 const { adminOnly, authenticated } = require('../middlewares/guards')
@@ -13,11 +14,9 @@ const { createMigrationService } = require('../services/migrationService')
 const { createMigrationController } = require('../controllers/migration.controller')
 const { createAdminService } = require('../services/adminService')
 const { createAdminController } = require('../controllers/admin.controller')
-
 const { createFusionService } = require('../services/fusionService')
 const { createFusionController } = require('../controllers/fusion.controller')
-
-// 1. Importamos dependencias para la integración de IA
+const { createAchievementService } = require('../services/achievementService')
 const { createRecognitionService } = require('../services/recognitionService')
 const { createAiService } = require('../services/aiService')
 const { createAiRecognitionController } = require('../controllers/aiRecognition.controller')
@@ -28,16 +27,17 @@ const progressController = createProgressController(createProgressService({ mode
 const migrationController = createMigrationController(createMigrationService({ models, sequelize: models.sequelize }))
 const adminController = createAdminController(createAdminService({ models }))
 
-// 2. Instanciamos el controlador de IA aislado
-const recognitionService = createRecognitionService({ models })
+const recognitionService = createRecognitionService({
+  models,
+  sequelize: models.sequelize,
+  guestSessions,
+  achievements: createAchievementService({ models })
+})
 const aiService = createAiService()
 const aiRecognitionController = createAiRecognitionController(recognitionService, aiService)
 
 const router = Router()
 const userOrGuest = [validateToken.optional, createResolveActor(guestSessions)]
-
-// 3. Configuración de Multer
-const multer = require('multer')
 const upload = multer({ storage: multer.memoryStorage() })
 
 router.get('/progress/me', ...userOrGuest, progressController.getStats)
@@ -57,10 +57,10 @@ router.patch('/admin/users/:id', ...adminOnly, adminController.updateUser)
 router.get('/admin/users/:id/collection', ...adminOnly, adminController.getUserCollection)
 router.get('/admin/users/:id/achievements', ...adminOnly, adminController.getUserAchievements)
 
-// --- NUEVA MEJORA: Endpoint de IA con subida de archivo ---
-router.post('/recognition/auto', ...authenticated, upload.single('image'), aiRecognitionController.autoRecognize)
+// Permite tanto usuarios autenticados como invitados (con límite de 10 por sesión)
+router.post('/recognition/auto', ...userOrGuest, upload.single('image'), aiRecognitionController.autoRecognize)
 
-// --- Easter Egg: Alquimia ---
+// Alquimia / Fusión de rocas
 router.post('/collection/fusion', ...authenticated, fusionController.fuse)
 
 module.exports = router

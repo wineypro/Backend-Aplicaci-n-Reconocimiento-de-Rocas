@@ -1,6 +1,7 @@
-const { Op } = require('sequelize')
 const { buildListOptions } = require('../utils/queryOptions')
 const { HttpError } = require('../utils/httpError')
+
+const VALID_STATUSES = ['active', 'blocked']
 
 const createAdminService = ({ models }) => ({
   async getStats() {
@@ -27,7 +28,7 @@ const createAdminService = ({ models }) => ({
     return { registeredUsers, totalRecognitions, mostRecognizedRocks }
   },
 
-  async getRecognitions(query) {
+  async getRecognitions(query = {}) {
     const options = buildListOptions(query, [])
     if (query.userId) options.where.userId = Number(query.userId)
     if (query.rockId) options.where.rockId = Number(query.rockId)
@@ -43,7 +44,7 @@ const createAdminService = ({ models }) => ({
     return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
   },
 
-  async getFeedback(query) {
+  async getFeedback(query = {}) {
     const options = buildListOptions(query, [])
     const result = await models.Feedback.findAndCountAll({
       ...options,
@@ -56,46 +57,77 @@ const createAdminService = ({ models }) => ({
     return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
   },
 
-  async updateUser(adminId, targetUserId, updates) {
-    if (adminId === Number(targetUserId)) {
+  async updateUser(adminId, targetUserId, updates = {}) {
+    const targetId = Number(targetUserId)
+    if (!Number.isInteger(targetId) || targetId < 1) {
+      throw new HttpError(400, 'ID de usuario inválido')
+    }
+    if (adminId === targetId) {
       throw new HttpError(403, 'No puedes bloquearte ni cambiar tu propio rol')
     }
-    
-    const user = await models.User.findByPk(targetUserId)
+
+    const user = await models.User.findByPk(targetId)
     if (!user) throw new HttpError(404, 'Usuario no encontrado')
 
     const allowedUpdates = {}
-    if (updates.roleId) allowedUpdates.roleId = Number(updates.roleId)
-    if (updates.status && ['active', 'blocked'].includes(updates.status)) {
+
+    if (updates.status !== undefined) {
+      if (typeof updates.status !== 'string' || !VALID_STATUSES.includes(updates.status)) {
+        throw new HttpError(400, 'Estado inválido; los valores permitidos son active o blocked')
+      }
       allowedUpdates.status = updates.status
+    }
+
+    if (updates.roleId !== undefined) {
+      const roleId = Number(updates.roleId)
+      if (!Number.isInteger(roleId) || roleId < 1) {
+        throw new HttpError(400, 'roleId debe ser un entero positivo')
+      }
+      const role = await models.Role.findByPk(roleId)
+      if (!role) {
+        throw new HttpError(400, 'El rol especificado no existe')
+      }
+      allowedUpdates.roleId = roleId
+    }
+
+    if (Object.keys(allowedUpdates).length === 0) {
+      throw new HttpError(400, 'Debes especificar al menos status o roleId para actualizar')
     }
 
     await user.update(allowedUpdates)
     return user
   },
 
-  async getUserCollection(targetUserId) {
-    const user = await models.User.findByPk(targetUserId)
+  async getUserCollection(targetUserId, query = {}) {
+    const targetId = Number(targetUserId)
+    const user = await models.User.findByPk(targetId)
     if (!user) throw new HttpError(404, 'Usuario no encontrado')
 
-    const items = await models.Collection.findAll({
-      where: { userId: targetUserId },
+    const options = buildListOptions(query, [])
+    options.where.userId = targetId
+
+    const result = await models.Collection.findAndCountAll({
+      ...options,
       include: [{ model: models.Rock, as: 'rock' }],
       order: [['firstDiscoveredAt', 'ASC']]
     })
-    return { items, total: items.length }
+    return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
   },
 
-  async getUserAchievements(targetUserId) {
-    const user = await models.User.findByPk(targetUserId)
+  async getUserAchievements(targetUserId, query = {}) {
+    const targetId = Number(targetUserId)
+    const user = await models.User.findByPk(targetId)
     if (!user) throw new HttpError(404, 'Usuario no encontrado')
 
-    const unlocked = await models.UserAchievement.findAll({
-      where: { userId: targetUserId },
+    const options = buildListOptions(query, [])
+    options.where.userId = targetId
+
+    const result = await models.UserAchievement.findAndCountAll({
+      ...options,
       include: [{ model: models.Achievement, as: 'achievement' }],
       order: [['unlockedAt', 'ASC']]
     })
-    return { items: unlocked, total: unlocked.length }
+    return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
   }
 })
 

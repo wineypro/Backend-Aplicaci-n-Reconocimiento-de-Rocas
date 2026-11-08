@@ -1,8 +1,8 @@
 # API de identificación de rocas
 
-API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administrar un catálogo de rocas y sus clasificaciones, gestionar usuarios y roles, registrar reconocimientos recibidos desde un modelo externo o simulado, mantener colecciones personales y desbloquear logros.
+API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administrar un catálogo de rocas y sus clasificaciones, gestionar usuarios y roles, clasificar imágenes de rocas mediante la API de inteligencia artificial de GeoDex o registrar reconocimientos manuales, mantener colecciones personales, fusionar especímenes y desbloquear logros.
 
-> **Estado de la identificación:** este backend no clasifica imágenes por sí mismo. El endpoint de reconocimiento recibe los datos de un resultado (`rockId`, `confidence` y, opcionalmente, `imageUrl`) y aplica las reglas de registro, colección y logros.
+> **Estado de la identificación:** este backend soporta tanto el reconocimiento automático de imágenes mediante integración con la API externa de IA GeoDex (`POST /api/recognition/auto` usando `multer`) como el registro directo de resultados (`POST /api/recognition` recibiendo `rockId`, `confidence` y, opcionalmente, `imageUrl`). En ambos flujos aplica las mismas reglas transaccionales de registro, límite de 10 intentos por sesión de invitado, colección personal y logros.
 
 ## Tabla de contenidos
 
@@ -14,21 +14,22 @@ API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administ
 - [Ejecución y base de datos](#ejecución-y-base-de-datos)
 - [Endpoints](#endpoints)
 - [Autenticación y permisos](#autenticación-y-permisos)
-- [Reconocimientos, invitados y logros](#reconocimientos-invitados-y-logros)
 - [Formato de respuestas y errores](#formato-de-respuestas-y-errores)
-- [Pruebas](#pruebas)
+- [Suite de pruebas automatizadas](#suite-de-pruebas-automatizadas)
 - [Estructura del proyecto](#estructura-del-proyecto)
-- [Funcionalidades pendientes](#funcionalidades-pendientes)
+- [Funcionalidades implementadas y estado del proyecto](#funcionalidades-implementadas-y-estado-del-proyecto)
 
 ## Características
 
 - CRUD de rocas, tipos, categorías, roles, logros, análisis, colecciones, usuarios y asociaciones de logros.
 - Búsqueda de rocas por texto, paginación y filtros por tipo, categoría y rango de dureza de Mohs.
+- Reconocimiento de rocas por imagen conectado a la API de IA de GeoDex (`POST /api/recognition/auto`) y registro manual (`POST /api/recognition`).
+- Sistema de fusión geológica de rocas (`POST /api/collection/fusion`) basado en la colección del usuario.
 - Registro e inicio de sesión con contraseñas protegidas mediante bcrypt y autenticación JWT.
-- Control de acceso basado en roles, con operaciones administrativas restringidas.
-- Sesiones temporales para invitados, con token aleatorio, expiración y límite de reconocimientos.
-- Registro de reconocimientos y mantenimiento de una colección personal sin duplicar rocas.
-- Desbloqueo automático de logros según condiciones configuradas.
+- Control de acceso basado en roles, con operaciones administrativas restringidas y validadas.
+- Sesiones temporales para invitados, con token aleatorio, expiración, límite de 10 reconocimientos por sesión y migración de progreso a cuenta registrada.
+- Registro de reconocimientos, retroalimentación (feedback) validada y mantenimiento de una colección personal sin duplicar rocas.
+- Desbloqueo automático de logros según condiciones configuradas y cálculo de rango geológico.
 - Inicialización de SQLite y carga de datos de demostración sin reemplazar los registros existentes.
 - Pruebas automatizadas con `node:test`.
 
@@ -38,6 +39,7 @@ API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administ
 - **Express**: servidor HTTP y definición de rutas.
 - **Sequelize**: ORM y gestión de modelos y asociaciones.
 - **SQLite**: base de datos local.
+- **Multer**: recepción y procesamiento en memoria de imágenes (`multipart/form-data`).
 - **JWT**: autenticación mediante tokens.
 - **bcrypt**: hash de contraseñas.
 - **node:test**: pruebas automatizadas.
@@ -52,14 +54,14 @@ Se requiere una versión compatible de Node.js y npm.
    npm install
    ```
 
-2. Crea un archivo `.env` en la raíz del proyecto y configura las variables indicadas en la sección siguiente.
+2. Crea un archivo `.env` en la raíz del proyecto (puedes copiar `.env.example`) y configura las variables indicadas en la sección siguiente.
 3. Inicia la API:
 
    ```bash
    npm start
    ```
 
-   Para desarrollo, si el proyecto tiene configurado ese script:
+   Para desarrollo:
 
    ```bash
    npm run dev
@@ -84,8 +86,10 @@ El servidor comienza a escuchar únicamente después de autenticar la conexión 
 | `ADMIN_PASSWORD` | Contraseña de la cuenta administradora inicial. | Una contraseña propia y segura |
 | `ADMIN_USERNAME` | Nombre de usuario de la cuenta administradora inicial. | `admin` |
 | `GUEST_SESSION_TTL_HOURS` | Vigencia de una sesión de invitado, en horas. | `72` |
+| `GEODEX_API_URL` | URL completa del endpoint de predicción de la API externa GeoDex ML. | `https://geodex-ml-api-76365064073.southamerica-west1.run.app/api/predict` |
+| `GEODEX_API_KEY` | Clave de acceso (Bearer token) para autenticarse ante la API de GeoDex. | `your-geodex-api-key` |
 
-Ejemplo de `.env` para desarrollo:
+Ejemplo de `.env` y contenido de `.env.example`:
 
 ```dotenv
 PORT=8080
@@ -96,9 +100,11 @@ ADMIN_EMAIL=admin@example.test
 ADMIN_PASSWORD=change-this-password
 ADMIN_USERNAME=admin
 GUEST_SESSION_TTL_HOURS=72
+GEODEX_API_URL=https://geodex-ml-api-76365064073.southamerica-west1.run.app/api/predict
+GEODEX_API_KEY=your-geodex-api-key
 ```
 
-Los valores del ejemplo son ilustrativos. No publiques el archivo `.env` ni secretos reales en el repositorio. Se debe crear y mantener un `.env.example` sin credenciales reales.
+Los valores del ejemplo son ilustrativos. No publiques el archivo `.env` ni secretos reales en el repositorio. El repositorio incluye `.env.example` con la plantilla completa sin credenciales reales.
 
 En desarrollo, si no se especifican las credenciales de administración, el proyecto utiliza valores predeterminados documentados en el código. En producción, `ADMIN_PASSWORD` es obligatorio. El proceso de inicialización no sobrescribe una cuenta administradora existente. El secreto JWT predeterminado, si existe en la configuración, solo debe utilizarse para facilitar pruebas locales y debe sustituirse en despliegues.
 
@@ -115,14 +121,14 @@ Una petición llega a Express y atraviesa los middlewares correspondientes. La r
 | Servidor | Carga la configuración, conecta la base de datos y arranca la aplicación. | `src/server.js` |
 | Aplicación | Configura Express, middlewares, rutas y manejadores de errores. | `src/app.js` |
 | Configuración | Define la conexión con Sequelize y SQLite. | `src/config/database.js` |
-| Modelos | Definen entidades, campos, validaciones y asociaciones. | `Rock`, `Category`, `Type`, `User` |
-| Rutas | Relacionan métodos y URLs con controladores. | `src/routes/rock.route.js` |
-| Controladores | Adaptan las peticiones y los resultados a respuestas HTTP. | `src/controllers/crud.controller.js` |
-| Servicios | Implementan CRUD y reglas de negocio. | `src/services/crudService.js` |
-| Middleware | Aplica tareas transversales, autenticación, autorización y manejo de errores. | `src/middlewares/` |
-| Utilidades | Contienen lógica compartida para validar y preparar consultas. | `src/utils/queryOptions.js` |
+| Modelos | Definen entidades, campos, validaciones y asociaciones. | `Rock`, `Category`, `Type`, `User`, `Feedback` |
+| Rutas | Relacionan métodos y URLs con controladores. | `src/routes/rock.route.js`, `src/routes/pending.route.js` |
+| Controladores | Adaptan las peticiones y los resultados a respuestas HTTP. | `src/controllers/aiRecognition.controller.js`, `src/controllers/feedback.controller.js` |
+| Servicios | Implementan CRUD, lógica de dominio e integración con IA externa. | `src/services/recognitionService.js`, `src/services/aiService.js`, `src/services/fusionService.js` |
+| Middleware | Aplica tareas transversales, autenticación, resolución de actor y manejo de errores. | `src/middlewares/` |
+| Utilidades | Contienen lógica compartida para validar y preparar consultas. | `src/utils/queryOptions.js`, `src/utils/httpError.js` |
 
-Los controladores genéricos delegan los errores mediante `next(error)`. Las asociaciones entre modelos se registran en `src/models/index.js`.
+Los controladores delegan los errores mediante `next(error)`. Las asociaciones entre modelos se registran en `src/models/index.js`.
 
 ## Ejecución y base de datos
 
@@ -138,7 +144,7 @@ Durante el arranque, el servidor:
 
 No se utiliza `force: true` para borrar y recrear todas las tablas. Sin embargo, Sequelize no realiza automáticamente todas las migraciones de esquemas existentes. Si una base de datos antigua no contiene las nuevas columnas o tablas, utiliza una base nueva o sigue el procedimiento de migración definido por el proyecto. Conserva una copia si necesitas mantener los datos anteriores.
 
-El seeder puede crear datos iniciales para tipos, categorías, roles, logros, rocas de ejemplo y la cuenta administradora. Está diseñado para evitar duplicar ejemplos en reinicios y no reemplazar valores que ya se hayan editado.
+El seeder crea datos iniciales para tipos, categorías, roles, logros, rocas de ejemplo y la cuenta administradora. Está diseñado para evitar duplicar ejemplos en reinicios y no reemplazar valores que ya se hayan editado.
 
 ## Endpoints
 
@@ -201,7 +207,7 @@ Los identificadores de tipo y categoría deben ser enteros positivos. Si un tipo
 
 Las validaciones del catálogo incluyen campos obligatorios, referencias existentes, dureza entre `1` y `10` y unicidad de `scientificName` e `index`. Los nombres de tipos y categorías también son únicos. Las escrituras del catálogo requieren el rol `Admin`.
 
-El endpoint `/api/rock/identificar` realiza una búsqueda textual parcial en propiedades del catálogo. Es una ayuda de búsqueda educativa; **no identifica muestras ni infiere minerales mediante inteligencia artificial**.
+El endpoint `/api/rock/identificar` realiza una búsqueda textual parcial en propiedades observables del catálogo; para clasificar fotografías de muestras mediante inteligencia artificial se utiliza `POST /api/recognition/auto`.
 
 Ejemplo de búsqueda por dureza:
 
@@ -272,19 +278,22 @@ Para el registro se requieren `userName`, `email` y `password`; la contraseña d
 
 Las cuentas bloqueadas (`status: "blocked"`) no pueden iniciar sesión. El modelo `User` elimina el campo `password` de la representación JSON.
 
-### Sesiones de invitados, reconocimientos y colección
+### Sesiones de invitados, reconocimientos (manual e IA), colección y fusión
 
 | Método y endpoint | Acceso | Función |
 |---|---|---|
 | `POST /api/guest/session` | Público | Crea una sesión temporal de invitado. |
 | `GET /api/guest/session` | Token de invitado | Consulta el estado y el límite restante. |
-| `POST /api/recognition` | Invitado o usuario autenticado | Registra un resultado de reconocimiento. |
+| `POST /api/guest/migrate` | Usuario autenticado (`Bearer` + `X-Guest-Token`) | Transfiere colección, análisis y logros del invitado a la cuenta e invalida la sesión. |
+| `POST /api/recognition` | Invitado o usuario autenticado | Registra un resultado de reconocimiento en JSON (`rockId`, `confidence`). |
+| `POST /api/recognition/auto` | Invitado o usuario autenticado | Recibe una imagen (`multipart/form-data`, campo `image`), consulta la IA de GeoDex y registra el reconocimiento. |
 | `GET /api/collection/me` | Usuario autenticado | Consulta la colección propia. |
 | `GET /api/collection/me/:rockId` | Usuario autenticado | Consulta una roca de la colección propia. |
+| `POST /api/collection/fusion` | Usuario autenticado | Fusiona dos rocas de la colección del usuario (`rockId1`, `rockId2`) y registra la roca obtenida del catálogo. |
 
 Para invitados, el token se envía mediante `X-Guest-Token`. Para usuarios registrados, se utiliza `Authorization: Bearer <TOKEN>`.
 
-Ejemplo de creación de sesión y registro de reconocimiento:
+Ejemplo de creación de sesión y registro de reconocimiento con JSON:
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/api/guest/session | node -pe "JSON.parse(require('fs').readFileSync(0)).token")
@@ -295,16 +304,50 @@ curl -X POST http://localhost:8080/api/recognition \
   -d '{ "rockId": 1, "confidence": 92, "imageUrl": "https://example.org/photo.jpg" }'
 ```
 
-El endpoint de reconocimiento recibe un resultado en JSON; no procesa una imagen ni ejecuta un modelo de clasificación dentro de este backend. La respuesta puede incluir el análisis registrado, el estado de la colección, si es un nuevo descubrimiento, los logros desbloqueados y el estado de la sesión de invitado.
+Ejemplo de reconocimiento automático de imagen con IA (`POST /api/recognition/auto`, disponible para usuarios autenticados e invitados):
+
+```bash
+curl -X POST http://localhost:8080/api/recognition/auto \
+  -H "X-Guest-Token: $TOKEN" \
+  -F "image=@/ruta/a/muestra.jpg"
+```
+
+El endpoint `/api/recognition/auto` convierte la imagen subida con `multer` a Base64, la envía mediante una petición `POST` a la URL configurada en `GEODEX_API_URL` autenticándose con `GEODEX_API_KEY`, busca la roca predicha dentro del catálogo local (sin autogenerar rocas con índices aleatorios ni datos inventados; responde `404` si no existe en el catálogo) y delega el registro a `recognitionService`.
+
+Ejemplo de fusión geológica de rocas (`POST /api/collection/fusion`):
+
+```bash
+curl -X POST http://localhost:8080/api/collection/fusion \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{ "rockId1": 1, "rockId2": 2 }'
+```
 
 Reglas de negocio:
 
-- Una sesión de invitado permite hasta **10 reconocimientos válidos por sesión**. El límite no es por persona.
+- Una sesión de invitado permite hasta **10 reconocimientos válidos por sesión** (aplicado tanto en `/api/recognition` como en `/api/recognition/auto`). El límite no es por persona.
 - Al superar el límite, el siguiente intento responde `403` con el código `GUEST_LIMIT_REACHED`.
 - Los intentos inválidos no consumen el límite.
 - Las sesiones expiran según `GUEST_SESSION_TTL_HOURS`; la base de datos almacena el hash SHA-256 del token, no el token en texto plano.
 - Los usuarios autenticados no tienen ese límite de reconocimientos.
 - Descubrir nuevamente una roca no crea una entrada duplicada en la colección: aumenta `recognitionCount` y conserva `firstDiscoveredAt`.
+
+### Progreso, estadísticas, retroalimentación y administración
+
+| Método y endpoint | Acceso | Función |
+|---|---|---|
+| `GET /api/progress/me` | Invitado o usuario autenticado | Estadísticas propias (`totalRecognitions`, `distinctRocks`, `unlockedAchievements`, `discoveryPercentage`, `rank`). |
+| `GET /api/progress/me/history` | Invitado o usuario autenticado | Historial paginado de reconocimientos propios. |
+| `GET /api/achievement/me` | Usuario autenticado | Lista de logros activos indicando cuáles están desbloqueados y su `unlockedAt`. |
+| `POST /api/recognition/:id/feedback` | Usuario autenticado | Crea retroalimentación (`isCorrect` booleano obligatorio, `comment` opcional hasta 255 caracteres). |
+| `GET /api/recognition/:id/feedback` | Usuario autenticado | Consulta la retroalimentación propia de un reconocimiento (`404` uniforme si no existe o es ajeno). |
+| `PATCH /api/recognition/:id/feedback` | Usuario autenticado | Actualiza `isCorrect` y/o `comment` de la retroalimentación propia. |
+| `GET /api/admin/stats` | Admin | Estadísticas globales (`registeredUsers`, `totalRecognitions`, `mostRecognizedRocks`). |
+| `GET /api/admin/recognitions` | Admin | Historial global paginado de reconocimientos (filtrable por `userId` y `rockId`). |
+| `GET /api/admin/feedback` | Admin | Listado global paginado de retroalimentaciones. |
+| `PATCH /api/admin/users/:id` | Admin | Actualiza `status` (`active` o `blocked`) y/o `roleId` (validando que el rol exista; `400` si son inválidos). |
+| `GET /api/admin/users/:id/collection` | Admin | Consulta paginada (`page`, `limit`) de la colección de un usuario. |
+| `GET /api/admin/users/:id/achievements` | Admin | Consulta paginada (`page`, `limit`) de los logros desbloqueados de un usuario. |
 
 ### Logros automáticos
 
@@ -336,10 +379,11 @@ El middleware `src/middlewares/validateToken.js` valida tokens Bearer, comprueba
 |---|---|---|---|
 | Lectura del catálogo (`rock`, `type`, `category`, `achievement`) | Permitida | Permitida | Permitida |
 | Escritura del catálogo | `401` | `403` | Permitida |
-| `POST /api/recognition` | Permitida, con límite por sesión invitada | Permitida, sin ese límite | Permitida |
-| `GET /api/collection/me` | `401` | Solo la propia | Solo su propia colección mediante esta ruta |
-| CRUD directo de `role`, `analysis`, `collection` y `user-achievement` | `401` | `403` | Permitido |
-| Listado de usuarios (`/api/user`) | `401` | `403` | Permitido |
+| `POST /api/recognition` y `POST /api/recognition/auto` | Permitida, con límite de 10 por sesión invitada | Permitida, sin límite | Permitida |
+| `GET /api/progress/me` y `GET /api/progress/me/history` | Permitida (sesión invitada) | Permitida (cuenta propia) | Permitida |
+| `GET /api/collection/me` y `POST /api/collection/fusion` | `401` | Solo la propia | Solo su propia colección mediante esta ruta |
+| `POST / GET / PATCH /api/recognition/:id/feedback` | `401` | Solo sobre reconocimientos propios (`404` si es ajeno) | Solo sobre reconocimientos propios en esta ruta |
+| Endpoints `/api/admin/*`, listado `/api/user` y CRUD crudo | `401` | `403` | Permitido |
 
 Esta matriz resume el comportamiento descrito en el proyecto; la configuración específica de cada ruta es la fuente definitiva de permisos.
 
@@ -355,10 +399,10 @@ Los endpoints utilizan códigos HTTP para indicar el resultado de una solicitud:
 | `400` | Datos, filtros, validaciones o referencias inválidas. |
 | `401` | Falta autenticación o el token es inválido o ha vencido. |
 | `403` | El usuario no tiene permisos o alcanzó un límite de uso. |
-| `404` | No existe el recurso o la ruta solicitada. |
-| `409` | Conflicto, como un registro duplicado o una eliminación no permitida por relaciones existentes. |
-| `500` | Error interno no esperado. |
-| `501` | Funcionalidad pendiente de implementación, cuando se usa el andamiaje correspondiente. |
+| `404` | No existe el recurso o la ruta solicitada (incluye acceso a feedback/análisis ajeno). |
+| `409` | Conflicto, como un registro duplicado, doble migración o eliminación no permitida. |
+| `500` | Error interno no esperado o configuración faltante. |
+| `502` | Error de comunicación con la API externa de inteligencia artificial. |
 
 Los errores de validación y unicidad de Sequelize se convierten en respuestas `400`; los controladores delegan los errores al middleware global.
 
@@ -370,24 +414,22 @@ Ejecuta la suite completa con:
 npm test
 ```
 
-La suite utiliza `node:test` y `test/helpers/testApp.js` para levantar la aplicación con una base de datos SQLite temporal. Los antiguos casos pendientes (`test.todo`) de la cátedra fueron convertidos en pruebas funcionales, de modo que las funcionalidades implementadas se verifican mediante solicitudes HTTP y comprobaciones de sus respuestas y efectos en la base de datos.
+La suite utiliza `node:test` y `test/helpers/testApp.js` para levantar la aplicación con una base de datos SQLite temporal. Todas las funcionalidades del proyecto cuentan con pruebas funcionales mediante solicitudes HTTP y comprobaciones de sus respuestas y efectos en la base de datos.
 
 La cobertura incluye:
 
 - **CRUD y consultas:** creación, lectura, actualización y eliminación; registros inexistentes; campos inmutables; validación de datos; paginación, búsqueda y límites de resultados.
 - **Catálogo y taxonomía:** filtros por tipo y categoría, consulta de rocas asociadas a tipos y categorías, validaciones de referencias y búsqueda por rango de dureza de Mohs, incluidos los límites inclusivos y los parámetros inválidos.
 - **Autenticación y autorización:** registro, inicio de sesión, JWT, contraseñas protegidas con bcrypt, cuentas bloqueadas, perfil propio, roles y restricciones de acceso para operaciones administrativas.
-- **Sesiones de invitados:** creación y consulta de sesiones temporales, expiración y límite de reconocimientos por sesión.
-- **Reconocimientos y colecciones:** registro del resultado recibido, historial, transacciones, descubrimientos nuevos, actualización del contador al reconocer una roca repetida y prevención de duplicados en la colección.
-- **Progreso y estadísticas personales:** consulta del progreso, historial de reconocimientos y métricas de descubrimiento de rocas.
+- **Sesiones de invitados:** creación y consulta de sesiones temporales, expiración y límite de 10 reconocimientos por sesión.
+- **Reconocimientos, IA y colecciones:** registro del resultado recibido o clasificado con IA, historial, transacciones, descubrimientos nuevos, actualización del contador al reconocer una roca repetida, prevención de duplicados en la colección y fusión de rocas.
+- **Progreso y estadísticas personales:** consulta del progreso, rango geológico, historial de reconocimientos y métricas de descubrimiento de rocas.
 - **Logros:** desbloqueo automático de logros como `first-discovery`, `rock-explorer` y `dedicated-identifier`, prevención de duplicados y registro de la fecha de desbloqueo.
-- **Feedback:** creación, consulta y actualización de comentarios vinculados a reconocimientos, con comprobación de que la operación corresponda al usuario propietario.
+- **Feedback:** creación, consulta y actualización de comentarios vinculados a reconocimientos, validación booleana de `isCorrect`, límite de longitud de `comment` y respuesta `404` uniforme cuando el reconocimiento no pertenece al usuario.
 - **Migración de invitados:** transferencia de colecciones y logros a una cuenta autenticada, invalidación de la sesión temporal y prevención de transferencias repetidas.
-- **Administración:** verificación de permisos `adminOnly` para estadísticas globales, consulta administrativa de reconocimientos y feedback, gestión del estado de las cuentas y acceso a los datos de otros usuarios.
+- **Administración:** verificación de permisos `adminOnly` para estadísticas globales, consulta administrativa paginada de reconocimientos, feedback, colecciones y logros, y validación de `status` y existencia de `roleId` al actualizar usuarios.
 - **Claves compuestas:** operaciones sobre `UserAchievement` identificando el registro mediante `userId` y `achievementId`.
 - **Errores y transacciones:** respuestas HTTP adecuadas ante datos inválidos, falta de permisos, recursos inexistentes y conflictos; comprobación de que las operaciones relacionadas mantengan la consistencia de los datos.
-
-Las pruebas de reconocimiento no implican que este backend clasifique imágenes por sí mismo: el flujo documentado recibe un resultado simulado del modelo y comprueba cómo se registra y procesa.
 
 ## Estructura del proyecto
 
@@ -398,52 +440,86 @@ src/
 ├── config/
 │   └── database.js
 ├── controllers/
+│   ├── admin.controller.js
+│   ├── aiRecognition.controller.js
+│   ├── crud.controller.js
+│   ├── feedback.controller.js
+│   ├── fusion.controller.js
+│   ├── migration.controller.js
+│   ├── progress.controller.js
+│   ├── recognition.controller.js
+│   ├── rock.controller.js
+│   └── user.controller.js
 ├── database/
 │   ├── seedAdmin.js
 │   └── seedDemoData.js
 ├── middlewares/
 │   ├── validateToken.js
 │   ├── authorizeRoles.js
+│   ├── resolveActor.js
 │   └── guards.js
 ├── models/
 │   └── index.js
 ├── routes/
+│   ├── collection.route.js
 │   ├── crud.route.js
+│   ├── guest.route.js
+│   ├── pending.route.js
+│   ├── recognition.route.js
 │   ├── rock.route.js
-│   └── taxonomy.route.js
+│   ├── taxonomy.route.js
+│   └── user.route.js
 ├── services/
-│   ├── crudService.js
-│   ├── rockService.js
-│   ├── recognitionService.js
-│   ├── guestSessionService.js
+│   ├── achievementService.js
+│   ├── adminService.js
+│   ├── aiService.js
 │   ├── collectionService.js
-│   └── achievementService.js
+│   ├── crudService.js
+│   ├── feedbackService.js
+│   ├── fusionService.js
+│   ├── guestSessionService.js
+│   ├── migrationService.js
+│   ├── progressService.js
+│   ├── recognitionService.js
+│   └── rockService.js
 └── utils/
-    └── queryOptions.js
+    ├── httpError.js
+    ├── queryOptions.js
+    └── roles.js
 
 test/
 ├── helpers/
 │   └── testApp.js
 ├── auth.test.js
+├── catalog.test.js
+├── compositeCrud.test.js
+├── crudService.test.js
+├── databasePath.test.js
+├── demoSeeder.test.js
+├── pendingStudent.test.js
+├── queryOptions.test.js
+├── recognition.test.js
 ├── rockHardness.test.js
-└── pruebas de progreso, logros, feedback, migración y administración
+├── seedAdmin.test.js
+├── serverStartup.test.js
+└── userSerialization.test.js
 ```
-
-Esta estructura resume los archivos mencionados en la documentación; puede haber otros archivos y pruebas en el repositorio.
 
 ## Funcionalidades implementadas y estado del proyecto
 
-Las funcionalidades que anteriormente estaban representadas por `test.todo` fueron implementadas y cuentan con pruebas funcionales, de acuerdo con los cambios del proyecto. Entre ellas se encuentran:
+Todas las funcionalidades requeridas por la cátedra y las mejoras adicionales se encuentran implementadas y verificadas mediante pruebas automatizadas:
 
-- [x] Progreso y estadísticas individuales: `GET /api/progress/me`.
-- [x] Historial de reconocimientos: `GET /api/progress/me/history`.
+- [x] Reconocimiento automático con IA (`POST /api/recognition/auto`) compatible con usuarios autenticados e invitados (`userOrGuest`) respetando el límite de 10 reconocimientos por sesión.
+- [x] Sistema de fusión geológica de rocas (`POST /api/collection/fusion`) utilizando especímenes reales del catálogo.
+- [x] Progreso, rango geológico y estadísticas individuales: `GET /api/progress/me`.
+- [x] Historial paginado de reconocimientos: `GET /api/progress/me/history`.
 - [x] Consulta de logros propios, bloqueados y desbloqueados: `GET /api/achievement/me`.
-- [x] Feedback asociado a reconocimientos, con operaciones de creación, consulta y actualización y validación de propiedad.
-- [x] Migración de colecciones y logros de una sesión de invitado a una cuenta, con invalidación del token temporal y prevención de doble transferencia.
-- [x] Administración de usuarios, incluyendo control de rol y estado de cuenta.
+- [x] Feedback asociado a reconocimientos (`POST | GET | PATCH /api/recognition/:id/feedback`) con validación estricta de booleano en `isCorrect`, longitud de `comment` y respuesta `404` uniforme ante recursos inexistentes o ajenos.
+- [x] Migración de colecciones y logros de una sesión de invitado a una cuenta (`POST /api/guest/migrate`), con invalidación del token temporal y prevención de doble transferencia.
+- [x] Administración de usuarios (`PATCH /api/admin/users/:id`), validando explícitamente `status` (`active` o `blocked`) y la existencia de `roleId` con respuesta `400` ante datos inválidos.
 - [x] Estadísticas globales: `GET /api/admin/stats`.
-- [x] Consulta administrativa del historial de reconocimientos y feedback.
-- [x] Consulta administrativa de las colecciones y los logros de usuarios.
-- [x] Pruebas automatizadas para los flujos anteriores, además de las pruebas de catálogo, autenticación, permisos, dureza, claves compuestas y transacciones.
+- [x] Consulta administrativa paginada del historial de reconocimientos (`GET /api/admin/recognitions`) y feedback (`GET /api/admin/feedback`).
+- [x] Consulta administrativa paginada de las colecciones (`GET /api/admin/users/:id/collection`) y logros (`GET /api/admin/users/:id/achievements`) de usuarios.
+- [x] Variables `GEODEX_API_URL` y `GEODEX_API_KEY` documentadas e incluidas en `.env.example`.
 
-Para comprobar el estado actual del proyecto, ejecuta `npm test`. La suite debe finalizar correctamente; si una prueba falla, revisa el mensaje y el caso correspondiente antes de considerar validada la versión.
+Para comprobar el estado actual del proyecto, ejecuta `npm test`.

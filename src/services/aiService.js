@@ -2,11 +2,16 @@ const { HttpError } = require('../utils/httpError')
 
 const createAiService = () => ({
   async identifyRock(base64Image) {
+    const apiUrl = process.env.GEODEX_API_URL
+    if (!apiUrl) {
+      throw new HttpError(500, 'GEODEX_API_URL no está configurada en las variables de entorno.')
+    }
+
     try {
-      const response = await fetch(process.env.GEODEX_API_URL, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.GEODEX_API_KEY}`,
+          ...(process.env.GEODEX_API_KEY ? { Authorization: `Bearer ${process.env.GEODEX_API_KEY}` } : {}),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
