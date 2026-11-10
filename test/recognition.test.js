@@ -47,21 +47,30 @@ test('a guest session is limited to 10 recognitions, deduplicates the collection
   const { body: { token } } = await app.request('POST', '/api/guest/session')
   const credentials = { guestToken: token }
 
+  // Primer intento (Roca 0) -> Desbloquea primera-roca y first-discovery
   const first = await recognize(rocks[0], credentials)
   assert.equal(first.status, 201)
   assert.equal(first.body.newDiscovery, true)
-  assert.deepEqual(first.body.unlockedAchievements.map(item => item.slug), ['first-discovery'])
+  assert.deepEqual(first.body.unlockedAchievements.map(item => item.slug), ['primera-roca', 'first-discovery'])
   assert.equal(first.body.guest.remaining, 9)
 
+  // Segundo intento (Roca 0, repetida) -> No desbloquea nada
   const repeat = await recognize(rocks[0], credentials)
   assert.equal(repeat.body.newDiscovery, false)
   assert.equal(repeat.body.collection.recognitionCount, 2)
   assert.deepEqual(repeat.body.unlockedAchievements, [])
 
-  await recognize(rocks[1], credentials)
-  const third = await recognize(rocks[2], credentials)
-  assert.deepEqual(third.body.unlockedAchievements.map(item => item.slug), ['rock-explorer'])
+  // Tercer intento (Roca 1, diferente) -> Desbloquea catalogo-inicial (2 rocas distintas)
+  const secondUnique = await recognize(rocks[1], credentials)
+  assert.deepEqual(secondUnique.body.unlockedAchievements.map(item => item.slug), ['catalogo-inicial'])
+
+  // Cuarto intento (Roca 2, diferente) -> Desbloquea rock-explorer (3 rocas distintas)
+  const thirdUnique = await recognize(rocks[2], credentials)
+  assert.deepEqual(thirdUnique.body.unlockedAchievements.map(item => item.slug), ['rock-explorer'])
+  
   for (let i = 0; i < 5; i += 1) assert.equal((await recognize(rocks[i % 3], credentials)).status, 201)
+  
+  // Décimo intento (Roca 0) -> Desbloquea dedicated-identifier
   const tenth = await recognize(rocks[0], credentials)
   assert.equal(tenth.status, 201)
   assert.deepEqual(tenth.body.unlockedAchievements.map(item => item.slug), ['dedicated-identifier'])
@@ -77,7 +86,7 @@ test('a guest session is limited to 10 recognitions, deduplicates the collection
   assert.equal(await app.models.Collection.count({ where: { guestSessionId: session.id } }), 3)
   assert.equal(await app.models.Analysis.count({ where: { guestSessionId: session.id } }), 10)
   const unlocked = await app.models.GuestAchievement.findAll({ where: { guestSessionId: session.id } })
-  assert.equal(unlocked.length, 3)
+  assert.equal(unlocked.length, 5) // primera-roca, catalogo-inicial, first-discovery, rock-explorer, dedicated-identifier
   assert.ok(unlocked.every(item => item.unlockedAt instanceof Date))
 })
 
@@ -108,7 +117,7 @@ test('authenticated users are not limited, keep the first discovery date and onl
 
   const user = await app.models.User.findOne({ where: { userName: 'collector' } })
   const unlocked = await app.models.UserAchievement.findAll({ where: { userId: user.id } })
-  assert.deepEqual(unlocked.length, 2, 'first-discovery and dedicated-identifier, each exactly once')
+  assert.deepEqual(unlocked.length, 3, 'primera-roca, first-discovery and dedicated-identifier')
   assert.ok(unlocked.every(item => item.unlockedAt instanceof Date))
 })
 
@@ -118,5 +127,5 @@ test('deactivated achievements are not unlocked', async () => {
   assert.equal((await app.request('PATCH', `/api/achievement/${achievement.id}`, { token: adminToken, body: { isActive: false } })).status, 200)
   const { token } = await app.registerAndLogin('latecomer')
   const response = await recognize(rocks[0], { token })
-  assert.deepEqual(response.body.unlockedAchievements, [])
+  assert.deepEqual(response.body.unlockedAchievements.filter(a => a.slug === 'first-discovery'), [])
 })

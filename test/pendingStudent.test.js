@@ -107,10 +107,10 @@ describe('Funciones implementadas por el estudiante', async () => {
       body: { rockId1: 1, rockId2: 2 } 
     })
 
-    // 3. Ahora sí debe dar 200 OK y devolver Mármol Brillante
+    // 3. Ahora sí debe dar 200 OK y devolver Obsidiana
     assert.equal(response.status, 200)
     assert.ok('success' in response.body)
-    assert.equal(response.body.discoveredItem, 'Mármol Brillante')
+    assert.equal(response.body.discoveredItem, 'Obsidiana')
   })
 
   after(async () => {

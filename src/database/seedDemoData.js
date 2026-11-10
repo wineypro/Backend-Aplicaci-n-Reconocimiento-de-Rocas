@@ -8,7 +8,8 @@ const referenceData = {
     { name: 'Volcanica', description: 'Rocas formadas por solidificacion de lava en superficie.' },
     { name: 'Plutonica', description: 'Rocas formadas por solidificacion lenta del magma en profundidad.' },
     { name: 'Clastica', description: 'Rocas sedimentarias formadas por fragmentos compactados.' },
-    { name: 'Foliada', description: 'Rocas metamorfoseadas con minerales alineados en planos.' }
+    { name: 'Foliada', description: 'Rocas metamorfoseadas con minerales alineados en planos.' },
+    { name: 'No Foliada', description: 'Rocas metamorfoseadas sin alineación mineral visible.' }
   ],
   Role: [
     { name: 'Estudiante' },
@@ -17,9 +18,9 @@ const referenceData = {
     { name: 'Usuario autenticado' }
   ],
   Achievement: [
-    { slug: 'primera-roca', name: 'Primera roca', description: 'Explora una roca del catalogo.', experience: 10 },
-    { slug: 'catalogo-inicial', name: 'Catalogo inicial', description: 'Consulta varias rocas del catalogo.', experience: 25 },
-    // Automatic achievements evaluated after every recognition (see achievementService).
+    // Se les agregó conditionType y conditionValue para que la BD sepa exactamente cuándo desbloquearlos
+    { slug: 'primera-roca', name: 'Primera roca', description: 'Realiza tu primer análisis geológico.', experience: 10, conditionType: 'total_recognitions', conditionValue: 1 },
+    { slug: 'catalogo-inicial', name: 'Catálogo inicial', description: 'Descubre tus primeras 2 rocas distintas.', experience: 20, conditionType: 'distinct_rocks', conditionValue: 2 },
     { slug: 'first-discovery', name: 'Primer descubrimiento', description: 'Identifica tu primera roca.', experience: 10, conditionType: 'distinct_rocks', conditionValue: 1 },
     { slug: 'rock-explorer', name: 'Explorador de rocas', description: 'Descubre 3 rocas distintas.', experience: 25, conditionType: 'distinct_rocks', conditionValue: 3 },
     { slug: 'dedicated-identifier', name: 'Identificador dedicado', description: 'Realiza 10 reconocimientos.', experience: 50, conditionType: 'total_recognitions', conditionValue: 10 }
@@ -53,6 +54,19 @@ async function seedDemoData(models) {
     references[modelName] = new Map()
     for (const record of records) {
       const key = modelName === 'Achievement' ? 'slug' : 'name'
+      
+      // Forzar la actualización del achievement para que tome los conditionType nuevos
+      if (modelName === 'Achievement') {
+        let ach = await model.findOne({ where: { [key]: record[key] }, paranoid: false })
+        if (ach) {
+          await ach.update({ conditionType: record.conditionType, conditionValue: record.conditionValue })
+        } else {
+          ach = await model.create(record)
+        }
+        references[modelName].set(record[key], ach)
+        continue;
+      }
+
       const row = await findOrCreateByNaturalKey(model, { [key]: record[key] }, record)
       references[modelName].set(record[key], row)
     }
