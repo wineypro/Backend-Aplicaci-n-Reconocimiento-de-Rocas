@@ -14,14 +14,21 @@ const createAdminService = ({ models }) => ({
         [models.sequelize.fn('COUNT', models.sequelize.col('Analysis.id')), 'count']
       ],
       group: ['rockId', 'rock.id', 'rock.name'],
-      include: [{ model: models.Rock, as: 'rock', attributes: ['name'] }],
+      include: [
+        {
+          model: models.Rock.unscoped(),
+          as: 'rock',
+          attributes: ['id', 'name'],
+          required: true
+        }
+      ],
       order: [[models.sequelize.literal('count'), 'DESC']],
       limit: 5
     })
 
     const mostRecognizedRocks = topRocks.map(r => ({
       rockId: r.rockId,
-      name: r.rock.name,
+      name: r.rock?.name || `Roca #${r.rockId}`,
       count: Number(r.get('count'))
     }))
 
@@ -51,7 +58,7 @@ const createAdminService = ({ models }) => ({
       order: [['createdAt', 'DESC']],
       include: [
         { model: models.User, as: 'user', attributes: ['id', 'userName'] },
-        { model: models.Analysis, as: 'analysis', include: [{ model: models.Rock, as: 'rock', attributes: ['name'] }] }
+        { model: models.Analysis, as: 'analysis', include: [{ model: models.Rock.unscoped(), as: 'rock', attributes: ['name'] }] }
       ]
     })
     return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
@@ -62,9 +69,6 @@ const createAdminService = ({ models }) => ({
     if (!Number.isInteger(targetId) || targetId < 1) {
       throw new HttpError(400, 'ID de usuario inválido')
     }
-    if (adminId === targetId) {
-      throw new HttpError(403, 'No puedes bloquearte ni cambiar tu propio rol')
-    }
 
     const user = await models.User.findByPk(targetId)
     if (!user) throw new HttpError(404, 'Usuario no encontrado')
@@ -72,6 +76,9 @@ const createAdminService = ({ models }) => ({
     const allowedUpdates = {}
 
     if (updates.status !== undefined) {
+      if (adminId === targetId && updates.status !== user.status) {
+        throw new HttpError(403, 'No puedes bloquear tu propia cuenta de administrador')
+      }
       if (typeof updates.status !== 'string' || !VALID_STATUSES.includes(updates.status)) {
         throw new HttpError(400, 'Estado inválido; los valores permitidos son active o blocked')
       }
@@ -80,6 +87,9 @@ const createAdminService = ({ models }) => ({
 
     if (updates.roleId !== undefined) {
       const roleId = Number(updates.roleId)
+      if (adminId === targetId && roleId !== user.roleId) {
+        throw new HttpError(403, 'No puedes cambiar tu propio rol de administrador')
+      }
       if (!Number.isInteger(roleId) || roleId < 1) {
         throw new HttpError(400, 'roleId debe ser un entero positivo')
       }
@@ -90,8 +100,24 @@ const createAdminService = ({ models }) => ({
       allowedUpdates.roleId = roleId
     }
 
+    if (updates.userName !== undefined) {
+      const cleanName = String(updates.userName).trim()
+      if (!cleanName) throw new HttpError(400, 'El nombre de usuario no puede estar vacío')
+      allowedUpdates.userName = cleanName
+    }
+
+    if (updates.email !== undefined) {
+      const cleanEmail = String(updates.email).trim()
+      if (!cleanEmail || !cleanEmail.includes('@')) throw new HttpError(400, 'El correo electrónico no es válido')
+      allowedUpdates.email = cleanEmail
+    }
+
+    if (updates.phone !== undefined) {
+      allowedUpdates.phone = updates.phone ? String(updates.phone).trim() : null
+    }
+
     if (Object.keys(allowedUpdates).length === 0) {
-      throw new HttpError(400, 'Debes especificar al menos status o roleId para actualizar')
+      throw new HttpError(400, 'Debes especificar al menos un campo para actualizar')
     }
 
     await user.update(allowedUpdates)
@@ -108,7 +134,7 @@ const createAdminService = ({ models }) => ({
 
     const result = await models.Collection.findAndCountAll({
       ...options,
-      include: [{ model: models.Rock, as: 'rock' }],
+      include: [{ model: models.Rock, as: 'rock', required: true }],
       order: [['firstDiscoveredAt', 'ASC']]
     })
     return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
@@ -124,10 +150,23 @@ const createAdminService = ({ models }) => ({
 
     const result = await models.UserAchievement.findAndCountAll({
       ...options,
-      include: [{ model: models.Achievement, as: 'achievement' }],
       order: [['unlockedAt', 'ASC']]
     })
-    return { items: result.rows, total: result.count, page: Number(query.page || 1), limit: options.limit }
+
+    const achievementIds = result.rows.map(r => r.achievementId).filter(Boolean)
+    const achievements = achievementIds.length
+      ? await models.Achievement.findAll({ where: { id: achievementIds } })
+      : []
+    const achMap = new Map(achievements.map(a => [a.id, a]))
+
+    const items = result.rows
+      .map(row => ({
+        ...row.toJSON(),
+        achievement: achMap.get(row.achievementId) || null
+      }))
+      .filter(item => item.achievement !== null)
+
+    return { items, total: items.length, page: Number(query.page || 1), limit: options.limit }
   }
 })
 

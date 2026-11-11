@@ -11,7 +11,7 @@ const create = async (req, res) => {
 
         const existingRock = await Rock.findOne({ where: { scientificName: data.scientificName } })
         if (existingRock) {
-            return res.status(400).json({message: 'No puede añadir una roca que ya este en el sistema.'})
+            return res.status(400).json({ message: 'No puede añadir una roca que ya esté en el sistema.' })
         }
 
         const rock = await Rock.create(data)
@@ -22,31 +22,33 @@ const create = async (req, res) => {
     } catch (error) {
         console.error(error)
         res.status(500).json({
-            message: "Error interno del Servidor, intente nuevamente."
+            message: 'Error interno del Servidor, intente nuevamente.'
         })
     }
 }
 
 const obtain = async (req, res) => {
     try {
-        const rocks = await Rock.findAll()
-
-        // Validación de que no existan rocas en el sistema.
+        const rocks = await Rock.findAll({
+            include: ['type', 'category']
+        })
 
         return res.status(200).json({
-            message: "Rocas Obtenidas satisfactoriamente.",
+            message: 'Rocas obtenidas satisfactoriamente.',
             rocks: rocks
         })
     } catch (error) {
         console.error(error)
         res.status(500).json({
-            message: "Error interno del Servidor, intente nuevamente."
+            message: 'Error interno del Servidor, intente nuevamente.'
         })
     }
 }
 
 const obtainById = async (req, res) => {
-    const rock = await Rock.findByPk(req.params.id)
+    const rock = await Rock.findByPk(req.params.id, {
+        include: ['type', 'category']
+    })
     if (!rock) return res.status(404).json({ message: 'Roca no encontrada' })
     return res.json(rock)
 }
@@ -65,7 +67,6 @@ const deleteRock = async (req, res) => {
     return res.json({ message: 'Roca eliminada correctamente' })
 }
 
-// The controller only translates the service result into HTTP; validation and queries live in the service.
 const createRockController = service => ({
     byHardness: async (req, res, next) => {
         try { return res.status(200).json(await service.findByHardness(req.query)) } catch (error) { return next(error) }

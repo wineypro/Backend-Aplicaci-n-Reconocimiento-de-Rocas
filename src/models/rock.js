@@ -114,7 +114,10 @@ Rock.init({
     modelName: 'Rock',
     tableName: 'rock',
     timestamps: true,
-    paranoid: true
+    paranoid: true,
+    defaultScope: {
+        include: ['type', 'category']
+    }
 })
 
 Rock.associate = (models) => {

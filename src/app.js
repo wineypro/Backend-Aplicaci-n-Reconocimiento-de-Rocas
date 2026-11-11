@@ -8,7 +8,7 @@ const { HttpError } = require('./utils/httpError')
 const createApp = () => {
   const app = express()
   app.use(cors())
-  app.use(express.json())
+  app.use(express.json({ limit: '15mb' }))
   if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'))
   app.use('/api/user', require('./routes/user.route'))
   app.use('/api/rock', require('./routes/rock.route'))
@@ -35,7 +35,29 @@ const createApp = () => {
     if (res.headersSent) return next(error)
     if (error instanceof HttpError) return res.status(error.status).json({ message: error.message, code: error.code })
     if (error.type === 'entity.parse.failed') return res.status(400).json({ message: 'El cuerpo de la petición no es un JSON válido' })
-    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError' || error.name === 'SequelizeForeignKeyConstraintError') {
+
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      const fields = Object.keys(error.fields || {})
+      const firstPath = error.errors?.[0]?.path || fields[0] || ''
+      if (firstPath.toLowerCase().includes('scientific')) {
+        return res.status(400).json({ message: 'Ya existe una roca registrada con ese nombre científico.' })
+      }
+      if (firstPath.toLowerCase().includes('index')) {
+        return res.status(400).json({ message: 'Ya existe una roca con ese número de índice.' })
+      }
+      if (firstPath.toLowerCase().includes('slug')) {
+        return res.status(400).json({ message: 'Ya existe un logro con ese identificador (slug).' })
+      }
+      if (firstPath.toLowerCase().includes('email')) {
+        return res.status(400).json({ message: 'Ya existe un usuario registrado con ese correo electrónico.' })
+      }
+      if (firstPath.toLowerCase().includes('name')) {
+        return res.status(400).json({ message: 'Ya existe un registro con ese nombre.' })
+      }
+      return res.status(400).json({ message: 'Ya existe un registro con esos datos únicos.' })
+    }
+
+    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({ message: 'Los datos no son válidos', details: error.errors?.map(item => item.message) })
     }
     if (error.message?.includes('debe ser un entero positivo') || error.message?.includes('searchBy')) return res.status(400).json({ message: error.message })

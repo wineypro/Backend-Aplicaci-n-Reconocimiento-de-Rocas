@@ -18,17 +18,24 @@ const createProgressService = ({ models }) => {
       const UnlockModel = getUnlockModel(actor)
 
       const totalCatalogRocks = await models.Rock.count()
-      const distinctRocks = await models.Collection.count({ where })
-      const totalRecognitions = await models.Analysis.count({ where })
+      const distinctRocks = await models.Collection.count({
+        where,
+        include: [{ model: models.Rock.unscoped(), as: 'rock', required: true }]
+      })
+      const totalRecognitions = await models.Analysis.count({
+        where,
+        include: [{ model: models.Rock.unscoped(), as: 'rock', required: true }]
+      })
       const unlockedAchievements = await UnlockModel.count({ where })
 
-      const discoveryPercentage = totalCatalogRocks === 0 
-        ? 0 
+      const rawPercentage = totalCatalogRocks === 0
+        ? 0
         : Math.round((distinctRocks / totalCatalogRocks) * 1000) / 10
+      const discoveryPercentage = Math.min(100, rawPercentage)
 
       const rank = getRank(distinctRocks)
 
-      return { totalRecognitions, distinctRocks, unlockedAchievements, discoveryPercentage, rank }
+      return { totalRecognitions, distinctRocks, unlockedAchievements, discoveryPercentage, rank, totalCatalogRocks }
     },
 
     async getHistory(actor, query) {
@@ -40,7 +47,7 @@ const createProgressService = ({ models }) => {
         limit: options.limit,
         offset: options.offset,
         order: [['createdAt', 'DESC']],
-        include: [{ model: models.Rock, as: 'rock' }]
+        include: [{ model: models.Rock, as: 'rock', required: true }]
       })
 
       return { items: rows, total: count, page: Number(query.page || 1), limit: options.limit }
