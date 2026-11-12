@@ -112,9 +112,13 @@ const createAiService = () => ({
       throw new HttpError(422, 'No se pudo reconocer un espécimen válido en la imagen proporcionada.')
     }
 
+    const topPrediction =
+      jsonResponse.predictions?.[0] ||
+      jsonResponse.data?.predictions?.[0]
+
     const bestMatch =
       jsonResponse.result ||
-      (jsonResponse.predictions && jsonResponse.predictions[0]) ||
+      topPrediction ||
       (jsonResponse.data && (jsonResponse.data.result || (jsonResponse.data.predictions && jsonResponse.data.predictions[0]) || jsonResponse.data))
 
     if (!bestMatch) {
@@ -125,7 +129,7 @@ const createAiService = () => ({
     const rawConfidence = Number(bestMatch.confidence ?? bestMatch.probability ?? bestMatch.score ?? 85)
     const confidence = rawConfidence <= 1 ? Math.round(rawConfidence * 100) : Math.round(rawConfidence)
 
-    let catalog = bestMatch.catalog || bestMatch.specimen || bestMatch
+    let catalog = bestMatch.catalog || bestMatch.specimen || topPrediction?.catalog || topPrediction?.specimen || bestMatch
 
     if (!catalog.description || (!catalog.rock_type && !catalog.mineral_type)) {
       const specimenData = await this.fetchSpecimenByNameOrId({

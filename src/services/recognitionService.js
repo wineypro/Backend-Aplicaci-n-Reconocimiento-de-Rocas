@@ -7,7 +7,7 @@ const parseModelResult = (body = {}) => {
   if (!Number.isInteger(rockId) || rockId < 1) throw new HttpError(400, 'rockId es obligatorio y debe ser un entero positivo')
   const confidence = typeof body.confidence === 'number' ? body.confidence : NaN
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 100) throw new HttpError(400, 'confidence es obligatorio y debe estar entre 0 y 100')
-  for (const [field, max] of [['imageUrl', 500], ['note', 255]]) {
+  for (const [field, max] of [['imageUrl', 10000000], ['note', 255]]) {
     if (body[field] !== undefined && (typeof body[field] !== 'string' || body[field].length > max)) throw new HttpError(400, `${field} debe ser un texto de hasta ${max} caracteres`)
   }
   return { rockId, confidence: Math.round(confidence), imageUrl: body.imageUrl ?? null, note: body.note ?? null }

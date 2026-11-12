@@ -3,74 +3,74 @@ const { HttpError } = require('../utils/httpError')
 
 const RECIPES = [
   {
-    ingredientes: ['Basalto', 'Granito'],
+    ingredientes: ['Basalt', 'Granite'],
     resultado: {
-      name: 'Obsidiana',
+      name: 'Obsidian',
       scientificName: 'Obsidian',
       type: 'Ignea',
       category: 'Volcanica',
       hardness: 5,
-      color: 'Negro brillante',
+      color: 'Glassy black',
       index: 901
     }
   },
   {
-    ingredientes: ['Arenisca', 'Basalto'],
+    ingredientes: ['Sandstone', 'Basalt'],
     resultado: {
-      name: 'Cuarcita',
+      name: 'Quartzite',
       scientificName: 'Quartzite',
       type: 'Metamorfica',
       category: 'No Foliada',
       hardness: 7,
-      color: 'Blanco o grisáceo',
+      color: 'White to light gray',
       index: 902
     }
   },
   {
-    ingredientes: ['Pizarra', 'Granito'],
+    ingredientes: ['Slate', 'Granite'],
     resultado: {
-      name: 'Gneis',
+      name: 'Gneiss',
       scientificName: 'Gneiss',
       type: 'Metamorfica',
       category: 'Foliada',
       hardness: 6,
-      color: 'Bandeado',
+      color: 'Alternating light and dark bands',
       index: 903
     }
   },
   {
-    ingredientes: ['Arenisca', 'Pizarra'],
+    ingredientes: ['Sandstone', 'Slate'],
     resultado: {
-      name: 'Conglomerado',
+      name: 'Conglomerate',
       scientificName: 'Conglomerate',
       type: 'Sedimentaria',
       category: 'Clastica',
       hardness: 4,
-      color: 'Gris moteado',
+      color: 'Variable, rounded pebbles in matrix',
       index: 904
     }
   },
   {
-    ingredientes: ['Arenisca', 'Granito'],
+    ingredientes: ['Sandstone', 'Granite'],
     resultado: {
-      name: 'Mármol',
+      name: 'Marble',
       scientificName: 'Marble',
       type: 'Metamorfica',
       category: 'No Foliada',
       hardness: 3,
-      color: 'Blanco veteado',
+      color: 'White, veined',
       index: 905
     }
   },
   {
-    ingredientes: ['Basalto', 'Pizarra'],
+    ingredientes: ['Basalt', 'Slate'],
     resultado: {
-      name: 'Andesita',
+      name: 'Andesite',
       scientificName: 'Andesite',
       type: 'Ignea',
       category: 'Volcanica',
       hardness: 6,
-      color: 'Gris oscuro',
+      color: 'Medium to dark gray',
       index: 906
     }
   }
@@ -78,6 +78,17 @@ const RECIPES = [
 
 const FUSION_LOCKED_DESC =
   'Esta roca la descubriste por fusión. ¡Encuéntrala y tómale una foto en el escáner para desbloquear su información geológica!'
+
+const normalizeKey = (rock) => {
+  const sci = String(rock?.scientificName || rock?.name || '').trim()
+  const map = {
+    Basalto: 'Basalt',
+    Granito: 'Granite',
+    Arenisca: 'Sandstone',
+    Pizarra: 'Slate'
+  }
+  return map[sci] || sci
+}
 
 const createFusionService = ({ models }) => ({
   async fuseRocks(userId, rockId1, rockId2) {
@@ -99,7 +110,7 @@ const createFusionService = ({ models }) => ({
 
     if (!rock1 || !rock2) throw new HttpError(404, 'Una de las rocas seleccionadas no existe.')
 
-    const ingNames = [rock1.name, rock2.name]
+    const ingNames = [normalizeKey(rock1), normalizeKey(rock2)]
 
     const recipe = RECIPES.find(
       r => r.ingredientes.includes(ingNames[0]) && r.ingredientes.includes(ingNames[1])
@@ -124,7 +135,7 @@ const createFusionService = ({ models }) => ({
       })
 
       if (!fused) {
-        const existingIdx = await models.Rock.findOne({
+        const existingIdx = await models.Rock.unscoped().findOne({
           where: { index: recipe.resultado.index },
           paranoid: false
         })
@@ -142,11 +153,11 @@ const createFusionService = ({ models }) => ({
           typeId: type.id,
           categoryId: category.id,
           composition: 'LOCKED_BY_FUSION',
-          formula: 'Bloqueado (Escanea por foto)',
-          environment: 'Bloqueado (Escanea por foto)',
-          commonUses: 'Bloqueado (Escanea por foto)',
-          streak: 'Bloqueado',
-          texture: 'Bloqueado',
+          formula: 'LOCKED',
+          environment: 'LOCKED',
+          commonUses: 'LOCKED',
+          streak: 'LOCKED',
+          texture: 'LOCKED',
           density: 2.6,
           transparency: 0,
           tenacity: 1,
@@ -213,4 +224,5 @@ const createFusionService = ({ models }) => ({
   }
 })
 
-module.exports = { createFusionService }
+createFusionService.createFusionService = createFusionService
+module.exports = createFusionService

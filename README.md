@@ -2,6 +2,8 @@
 
 API REST desarrollada con **Node.js, Express, Sequelize y SQLite** para administrar un catálogo de rocas y sus clasificaciones, gestionar usuarios y roles, clasificar imágenes de rocas mediante la API de inteligencia artificial de GeoDex o registrar reconocimientos manuales, mantener colecciones personales, fusionar especímenes y desbloquear logros.
 
+**Autor:** Adriano Soca
+
 > **Estado de la identificación:** este backend soporta tanto el reconocimiento automático de imágenes mediante integración con la API externa de IA GeoDex (`POST /api/recognition/auto` usando `multer`) como el registro directo de resultados (`POST /api/recognition` recibiendo `rockId`, `confidence` y, opcionalmente, `imageUrl`). En ambos flujos aplica las mismas reglas transaccionales de registro, límite de 10 intentos por sesión de invitado, colección personal y logros.
 
 ## Tabla de contenidos
@@ -312,7 +314,20 @@ curl -X POST http://localhost:8080/api/recognition/auto \
   -F "image=@/ruta/a/muestra.jpg"
 ```
 
-El endpoint `/api/recognition/auto` convierte la imagen subida con `multer` a Base64, la envía mediante una petición `POST` a la URL configurada en `GEODEX_API_URL` autenticándose con `GEODEX_API_KEY`, busca la roca predicha dentro del catálogo local (sin autogenerar rocas con índices aleatorios ni datos inventados; responde `404` si no existe en el catálogo) y delega el registro a `recognitionService`.
+El endpoint `/api/recognition/auto` convierte la imagen recibida por `multer` a Base64 y la envía mediante una petición `POST` a `GEODEX_API_URL`, autenticándose con `GEODEX_API_KEY`. Acepta la identificación en `result` o en la primera entrada de `predictions`; cuando GeoDex separa los metadatos de identificación del catálogo, combina `result` con `predictions[0].catalog` (también admite `specimen`). Si faltan la descripción o el tipo de roca, intenta completar la ficha consultando el espécimen por ID o nombre.
+
+Con la respuesta de GeoDex, el backend crea o actualiza la ficha local identificada por nombre científico/nombre visible y luego registra el análisis y la colección mediante `recognitionService`. Al crear una ficha, asigna un índice disponible. Al actualizar una ficha existente, conserva su índice y una imagen local válida; cada nueva foto del reconocimiento se almacena en el análisis.
+
+Los datos de catálogo se leen de estos campos de GeoDex: `rock_type` (o `mineral_type`) para el tipo, `category` para la categoría, `formation_environment` para el ambiente y `common_uses` para los usos. Cuando GeoDex omite atributos o devuelve texto no convertible, se aplican los respaldos definidos por el controlador:
+
+| Campo local | Origen o respaldo |
+|---|---|
+| `composition`, `formula`, `environment`, `commonUses`, `color`, `streak`, `texture` | Se toman del catálogo; si faltan, se usan textos genéricos. `environment` espera `formation_environment` y `commonUses` espera `common_uses`. |
+| `hardness` | Se convierte a entero de 1 a 10. Si el dato no contiene un número ni una palabra reconocida (`soft`, `medium`, `hard`), se usa `6`. |
+| `density` | Se extrae un número o el promedio de los dos primeros números; si no hay números, se usa `2.7`. |
+| `transparency`, `tenacity` | Actualmente se guardan como `0` y `1`, respectivamente; no se obtienen de la respuesta de GeoDex. |
+
+Por ejemplo, si GeoDex responde `hardness: "Variable"` y `density: "Variable, often light to moderate"`, la ficha mostrará dureza `6` y densidad `2.7`. El endpoint automático responde `201` cuando el reconocimiento se registra correctamente; los errores de GeoDex o una respuesta sin resultado válido se convierten en errores HTTP según el middleware global.
 
 Ejemplo de fusión geológica de rocas (`POST /api/collection/fusion`):
 

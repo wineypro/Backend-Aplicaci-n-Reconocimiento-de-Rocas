@@ -9,7 +9,8 @@ const referenceData = {
     { name: 'Plutonica', description: 'Rocas formadas por solidificacion lenta del magma en profundidad.' },
     { name: 'Clastica', description: 'Rocas sedimentarias formadas por fragmentos compactados.' },
     { name: 'Foliada', description: 'Rocas metamorfoseadas con minerales alineados en planos.' },
-    { name: 'No Foliada', description: 'Rocas metamorfoseadas sin alineación mineral visible.' }
+    { name: 'No Foliada', description: 'Rocas metamorfoseadas sin alineación mineral visible.' },
+    { name: 'Rock', description: 'General rock specimen category from GeoDex API.' }
   ],
   Role: [
     { name: 'Estudiante' },
@@ -18,7 +19,6 @@ const referenceData = {
     { name: 'Usuario autenticado' }
   ],
   Achievement: [
-    // Se les agregó conditionType y conditionValue para que la BD sepa exactamente cuándo desbloquearlos
     { slug: 'primera-roca', name: 'Primera roca', description: 'Realiza tu primer análisis geológico.', experience: 10, conditionType: 'total_recognitions', conditionValue: 1 },
     { slug: 'catalogo-inicial', name: 'Catálogo inicial', description: 'Descubre tus primeras 2 rocas distintas.', experience: 20, conditionType: 'distinct_rocks', conditionValue: 2 },
     { slug: 'first-discovery', name: 'Primer descubrimiento', description: 'Identifica tu primera roca.', experience: 10, conditionType: 'distinct_rocks', conditionValue: 1 },
@@ -28,10 +28,90 @@ const referenceData = {
 }
 
 const rockData = [
-  { type: 'Ignea', category: 'Volcanica', index: 1, name: 'Basalto', scientificName: 'Basalt', description: 'Roca volcanica oscura de grano fino.', composition: 'Plagioclasa y piroxeno', formula: 'Variable', environment: 'Coladas de lava', commonUses: 'Construccion y pavimentos', hardness: 6, streak: 'Gris', color: 'Negro a gris oscuro', texture: 'Afanitica', density: 2.9, transparency: 0, tenacity: 1, imgUrl: 'https://example.org/basalt.jpg', mindatUrl: 'https://www.mindat.org/' },
-  { type: 'Ignea', category: 'Plutonica', index: 2, name: 'Granito', scientificName: 'Granite', description: 'Roca plutonica de grano visible, rica en cuarzo y feldespato.', composition: 'Cuarzo, feldespato y mica', formula: 'Variable', environment: 'Intrusiones magmaticas', commonUses: 'Construccion y ornamentacion', hardness: 6, streak: 'Blanca', color: 'Claro con granos visibles', texture: 'Faneritica', density: 2.7, transparency: 0, tenacity: 1, imgUrl: 'https://example.org/granite.jpg', mindatUrl: 'https://www.mindat.org/' },
-  { type: 'Sedimentaria', category: 'Clastica', index: 3, name: 'Arenisca', scientificName: 'Sandstone', description: 'Roca formada principalmente por granos de arena cementados.', composition: 'Granos de cuarzo y otros minerales', formula: 'Variable', environment: 'Playas, rios y desiertos', commonUses: 'Construccion y estudio de ambientes antiguos', hardness: 6, streak: 'Blanca', color: 'Variable, frecuentemente beige', texture: 'Clastica', density: 2.3, transparency: 0, tenacity: 1, imgUrl: 'https://example.org/sandstone.jpg', mindatUrl: 'https://www.mindat.org/' },
-  { type: 'Metamorfica', category: 'Foliada', index: 4, name: 'Pizarra', scientificName: 'Slate', description: 'Roca metamorfica de grano fino que se separa en laminas.', composition: 'Micas y cuarzo', formula: 'Variable', environment: 'Metamorfismo regional de bajo grado', commonUses: 'Cubiertas y revestimientos', hardness: 4, streak: 'Gris claro', color: 'Gris oscuro', texture: 'Foliada', density: 2.7, transparency: 0, tenacity: 1, imgUrl: 'https://example.org/slate.jpg', mindatUrl: 'https://www.mindat.org/' }
+  {
+    type: 'Ignea',
+    category: 'Volcanica',
+    index: 1,
+    name: 'Basalt',
+    scientificName: 'Basalt',
+    description: 'A dark, fine-grained extrusive igneous rock formed from the rapid cooling of low-viscosity lava.',
+    composition: 'Calcium-rich plagioclase feldspar, pyroxene, and olivine.',
+    formula: 'Not applicable (rock)',
+    environment: 'Lava flows, oceanic crust, and volcanic plateaus.',
+    commonUses: 'Construction aggregate, road base, cobblestones, and stone wool.',
+    hardness: 6,
+    streak: 'Not diagnostic',
+    color: 'Dark gray to black',
+    texture: 'Fine-grained, aphanitic or vesicular',
+    density: 2.9,
+    transparency: 0,
+    tenacity: 1,
+    imgUrl: 'https://example.org/basalt.jpg',
+    mindatUrl: 'https://www.mindat.org/'
+  },
+  {
+    type: 'Ignea',
+    category: 'Plutonica',
+    index: 2,
+    name: 'Granite',
+    scientificName: 'Granite',
+    description: 'A coarse-grained intrusive igneous rock rich in quartz and feldspar.',
+    composition: 'Typical composition includes quartz, feldspar, mica, and amphibole in varying proportions.',
+    formula: 'Not applicable (rock)',
+    environment: 'Crystallizes slowly underground from silica-rich magma.',
+    commonUses: 'Building stone, countertops, monuments, and igneous rock labs.',
+    hardness: 6,
+    streak: 'Not diagnostic',
+    color: 'Light gray, pink, white, or speckled',
+    texture: 'Coarse-grained, phaneritic',
+    density: 2.7,
+    transparency: 0,
+    tenacity: 1,
+    imgUrl: 'https://example.org/granite.jpg',
+    mindatUrl: 'https://www.mindat.org/'
+  },
+  {
+    type: 'Sedimentaria',
+    category: 'Clastica',
+    index: 3,
+    name: 'Sandstone',
+    scientificName: 'Sandstone',
+    description: 'A clastic sedimentary rock composed mainly of sand-sized mineral particles or rock fragments.',
+    composition: 'Quartz and feldspar grains cemented by silica, calcite, or iron oxide.',
+    formula: 'Not applicable (rock)',
+    environment: 'Beaches, deserts, river channels, and shallow marine deltas.',
+    commonUses: 'Building stone, paving, facade cladding, and aquifer reservoir rock.',
+    hardness: 6,
+    streak: 'Not diagnostic',
+    color: 'Tan, brown, yellow, red, gray, or white',
+    texture: 'Clastic, medium-grained (sand-sized)',
+    density: 2.3,
+    transparency: 0,
+    tenacity: 1,
+    imgUrl: 'https://example.org/sandstone.jpg',
+    mindatUrl: 'https://www.mindat.org/'
+  },
+  {
+    type: 'Metamorfica',
+    category: 'Foliada',
+    index: 4,
+    name: 'Slate',
+    scientificName: 'Slate',
+    description: 'A fine-grained, foliated, homogeneous metamorphic rock derived from shale-type sedimentary rock.',
+    composition: 'Quartz, muscovite or illite mica, chlorite, and accessory hematite or pyrite.',
+    formula: 'Not applicable (rock)',
+    environment: 'Low-grade regional metamorphism of mudstone or shale.',
+    commonUses: 'Roofing tiles, flooring, blackboards, and billiard tables.',
+    hardness: 4,
+    streak: 'Not diagnostic',
+    color: 'Dark gray, bluish gray, green, or purple',
+    texture: 'Fine-grained, foliated (slaty cleavage)',
+    density: 2.7,
+    transparency: 0,
+    tenacity: 1,
+    imgUrl: 'https://example.org/slate.jpg',
+    mindatUrl: 'https://www.mindat.org/'
+  }
 ]
 
 async function findOrCreateByNaturalKey(model, where, values) {
@@ -54,8 +134,7 @@ async function seedDemoData(models) {
     references[modelName] = new Map()
     for (const record of records) {
       const key = modelName === 'Achievement' ? 'slug' : 'name'
-      
-      // Forzar la actualización del achievement para que tome los conditionType nuevos
+
       if (modelName === 'Achievement') {
         let ach = await model.findOne({ where: { [key]: record[key] }, paranoid: false })
         if (ach) {
@@ -64,7 +143,7 @@ async function seedDemoData(models) {
           ach = await model.create(record)
         }
         references[modelName].set(record[key], ach)
-        continue;
+        continue
       }
 
       const row = await findOrCreateByNaturalKey(model, { [key]: record[key] }, record)
@@ -78,10 +157,27 @@ async function seedDemoData(models) {
     const type = references.Type.get(rock.type)
     const category = references.Category.get(rock.category)
     if (!type || !category) throw new Error(`Cannot seed demo data: missing reference for ${rock.scientificName}.`)
-    const existing = await Rock.findOne({ where: { scientificName: rock.scientificName }, paranoid: false })
-    if (existing) continue
-
+    const existing = await Rock.unscoped().findOne({ where: { scientificName: rock.scientificName }, paranoid: false })
     const { type: _type, category: _category, ...values } = rock
+
+    if (existing) {
+      // Actualizar el nombre y descripción a inglés para que coincida con la API si aún tenía datos antiguos
+      await existing.update({
+        name: values.name,
+        description: values.description,
+        composition: values.composition,
+        formula: values.formula,
+        environment: values.environment,
+        commonUses: values.commonUses,
+        streak: values.streak,
+        color: values.color,
+        texture: values.texture,
+        typeId: type.id,
+        categoryId: category.id
+      })
+      continue
+    }
+
     const index = await nextAvailableRockIndex(Rock, values.index)
     await Rock.create({
       ...values,
